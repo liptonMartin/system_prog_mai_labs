@@ -2628,7 +2628,7 @@ binary_search_tree<tkey, tvalue, compare, tag>::crend_postfix() const noexcept
 
 // endregion iterators requests implementation
 
-// region subtree rotations implementation
+//region subtree rotations implementation
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
 void binary_search_tree<tkey, tvalue, compare, tag>::small_left_rotation(node *&subtree_root) noexcept
@@ -2666,7 +2666,7 @@ void binary_search_tree<tkey, tvalue, compare, tag>::double_right_rotation(node 
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> void binary_search_tree<tkey, tvalue, compare, tag>::double_right_rotation(node *&subtree_root) noexcept", "your code should be here...");
 }
 
-// endregion subtree rotations implementation
+//endregion subtree rotations implementation
 
 namespace __detail {
     template<typename tkey, typename tvalue, typename compare, typename tag>
