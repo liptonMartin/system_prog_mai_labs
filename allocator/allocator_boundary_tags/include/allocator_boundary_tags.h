@@ -50,7 +50,7 @@ public:
     explicit allocator_boundary_tags(
             size_t space_size,
             std::pmr::memory_resource *parent_allocator = nullptr,
-            logger *logger = nullptr,
+            logger *log = nullptr,
             allocator_with_fit_mode::fit_mode allocate_fit_mode = allocator_with_fit_mode::fit_mode::first_fit);
 
 public:

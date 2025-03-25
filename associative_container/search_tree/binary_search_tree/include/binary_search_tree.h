@@ -122,7 +122,7 @@ public:
 
         prefix_iterator &operator--() & noexcept;
 
-        prefix_iterator const operator--(int not_used) const noexcept;
+        prefix_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -169,7 +169,7 @@ public:
 
         prefix_const_iterator &operator--() & noexcept;
 
-        prefix_const_iterator const operator--(int not_used) const noexcept;
+        prefix_const_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -217,7 +217,7 @@ public:
 
         prefix_reverse_iterator &operator--() & noexcept;
 
-        prefix_reverse_iterator const operator--(int not_used) const noexcept;
+        prefix_reverse_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -265,7 +265,7 @@ public:
 
         prefix_const_reverse_iterator &operator--() & noexcept;
 
-        prefix_const_reverse_iterator const operator--(int not_used) const noexcept;
+        prefix_const_reverse_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -316,7 +316,7 @@ public:
 
         infix_iterator &operator--() & noexcept;
 
-        infix_iterator const operator--(int not_used) const noexcept;
+        infix_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -363,7 +363,7 @@ public:
 
         infix_const_iterator &operator--() & noexcept;
 
-        infix_const_iterator const operator--(int not_used) const noexcept;
+        infix_const_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -411,7 +411,7 @@ public:
 
         infix_reverse_iterator &operator--() & noexcept;
 
-        infix_reverse_iterator const operator--(int not_used) const noexcept;
+        infix_reverse_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -459,7 +459,7 @@ public:
 
         infix_const_reverse_iterator &operator--() & noexcept;
 
-        infix_const_reverse_iterator const operator--(int not_used) const noexcept;
+        infix_const_reverse_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -510,7 +510,7 @@ public:
 
         postfix_iterator &operator--() & noexcept;
 
-        postfix_iterator const operator--(int not_used) const noexcept;
+        postfix_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -557,7 +557,7 @@ public:
 
         postfix_const_iterator &operator--() & noexcept;
 
-        postfix_const_iterator const operator--(int not_used) const noexcept;
+        postfix_const_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -605,7 +605,7 @@ public:
 
         postfix_reverse_iterator &operator--() & noexcept;
 
-        postfix_reverse_iterator const operator--(int not_used) const noexcept;
+        postfix_reverse_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -653,7 +653,7 @@ public:
 
         postfix_const_reverse_iterator &operator--() & noexcept;
 
-        postfix_const_reverse_iterator const operator--(int not_used) const noexcept;
+        postfix_const_reverse_iterator operator--(int not_used) noexcept;
 
         /** Throws exception if end
          */
@@ -1055,8 +1055,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::prefix_iterator::operator--() & 
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::prefix_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::prefix_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_iterator const binary_search_tree<tkey, tvalue, compare, tag>::prefix_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1133,8 +1133,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_iterator::operator-
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_iterator const binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1222,8 +1222,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::prefix_reverse_iterator::operato
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_reverse_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::prefix_reverse_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_reverse_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::prefix_reverse_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_reverse_iterator const binary_search_tree<tkey, tvalue, compare, tag>::prefix_reverse_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1311,8 +1311,8 @@ throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> c
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_reverse_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_reverse_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_reverse_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_reverse_iterator::operator--(int not_used) noexcept
 {
 throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_reverse_iterator const binary_search_tree<tkey, tvalue, compare, tag>::prefix_const_reverse_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1380,8 +1380,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::infix_iterator::operator--() & n
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::infix_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::infix_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::infix_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::infix_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::infix_iterator const binary_search_tree<tkey, tvalue, compare, tag>::infix_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1456,8 +1456,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::infix_const_iterator::operator--
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::infix_const_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::infix_const_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::infix_const_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::infix_const_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::infix_const_iterator const binary_search_tree<tkey, tvalue, compare, tag>::infix_const_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1545,8 +1545,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::infix_reverse_iterator::operator
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::infix_reverse_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::infix_reverse_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::infix_reverse_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::infix_reverse_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::infix_reverse_iterator const binary_search_tree<tkey, tvalue, compare, tag>::infix_reverse_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1634,8 +1634,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::infix_const_reverse_iterator::op
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::infix_const_reverse_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::infix_const_reverse_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::infix_const_reverse_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::infix_const_reverse_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::infix_const_reverse_iterator const binary_search_tree<tkey, tvalue, compare, tag>::infix_const_reverse_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1704,8 +1704,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::postfix_iterator::operator--() &
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::postfix_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::postfix_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_iterator const binary_search_tree<tkey, tvalue, compare, tag>::postfix_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1780,8 +1780,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_iterator::operator
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_iterator const binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1869,8 +1869,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::postfix_reverse_iterator::operat
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_reverse_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::postfix_reverse_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_reverse_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::postfix_reverse_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_reverse_iterator const binary_search_tree<tkey, tvalue, compare, tag>::postfix_reverse_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
@@ -1958,8 +1958,8 @@ binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_reverse_iterator::
 }
 
 template<typename tkey, typename tvalue, compator<tkey> compare, typename tag>
-typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_reverse_iterator const
-binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_reverse_iterator::operator--(int not_used) const noexcept
+typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_reverse_iterator
+binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_reverse_iterator::operator--(int not_used) noexcept
 {
     throw not_implemented("template<typename tkey, typename tvalue, compator<tkey> compare, typename tag> typename binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_reverse_iterator const binary_search_tree<tkey, tvalue, compare, tag>::postfix_const_reverse_iterator::operator--(int not_used) const noexcept", "your code should be here...");
 }
