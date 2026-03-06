@@ -1,0 +1,12 @@
+{
+  "name" : "sys-prog",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "40c0d758e1cc99a505b039a9a7e792154119c927",
+  "dependencies" : [ {
+    "name" : "boost-container",
+    "version>=" : "1.90.0#1"
+  }, {
+    "name" : "boost-system",
+    "version>=" : "1.90.0#1"
+  } ]
+}
