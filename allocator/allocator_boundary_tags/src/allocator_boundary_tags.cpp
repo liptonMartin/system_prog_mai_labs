@@ -252,7 +252,7 @@ allocator_boundary_tags::boundary_iterator::boundary_iterator(void *trusted) :
     if (trusted != nullptr) {
         const allocator_metadata* metadata = static_cast<allocator_metadata*>(trusted);
         _occupied_ptr = static_cast<char*>(trusted) + allocator_metadata_size;
-        if (metadata->first_occupied_block == nullptr) _occupied = true;
+        if (metadata->first_occupied_block != nullptr) _occupied = true;
     }
 }
 
