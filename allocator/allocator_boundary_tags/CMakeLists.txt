@@ -17,3 +17,21 @@ target_link_libraries(
         sys_prog_allctr_allctr_bndr_tgs
         PUBLIC
         sys_prog_allctr_allctr)
+
+add_executable(
+        main_boundary_tags
+        main.cpp
+)
+
+target_include_directories(
+        main_boundary_tags
+        PRIVATE
+        ./include
+)
+
+
+target_link_libraries(
+        main_boundary_tags
+        PRIVATE
+        sys_prog_allctr_allctr_bndr_tgs
+)

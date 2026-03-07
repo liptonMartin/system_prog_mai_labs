@@ -24,6 +24,24 @@ private:
 
     void *_trusted_memory;
 
+private:
+    class allocator_metadata {
+    public:
+        memory_resource *parent_allocator;
+        allocator_with_fit_mode::fit_mode allocate_fit_mode;
+        size_t size;
+        std::mutex mutex;
+        void* first_occupied_block;
+    };
+
+    class occupied_block_metadata {
+    public:
+        size_t size;
+        void* next_occupied_ptr;
+        void* back_occupied_ptr;
+        void* trusted_memory;
+    };
+
 public:
     
     ~allocator_boundary_tags() override;
@@ -54,6 +72,12 @@ private:
         void *at) override;
 
     bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override;
+
+    void* allocate_first_fit(size_t useful_size);
+
+    void* allocate_best_fit(size_t useful_size);
+
+    void *allocate_worst_fit(size_t useful_size);
 
 public:
     
@@ -107,6 +131,8 @@ private:
         boundary_iterator();
 
         boundary_iterator(void* trusted);
+
+        boundary_iterator(void* occupied_ptr, void* trusted);
     };
 
     friend class boundary_iterator;
