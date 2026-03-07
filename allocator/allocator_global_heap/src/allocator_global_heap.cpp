@@ -10,7 +10,7 @@ allocator_global_heap::allocator_global_heap() = default;
     void *ptr = ::operator new(total_size);
 
     if (ptr != nullptr) {
-        *static_cast<size_t*>(ptr) = size;
+        *static_cast<size_t*>(ptr) = total_size;
         return static_cast<size_t*>(ptr) + 1;
     }
     return nullptr;
