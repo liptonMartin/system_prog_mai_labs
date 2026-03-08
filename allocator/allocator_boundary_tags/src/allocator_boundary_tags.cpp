@@ -59,24 +59,38 @@ allocator_boundary_tags::allocator_boundary_tags(
     switch (metadata->allocate_fit_mode) {
         case (fit_mode::first_fit) : {
             result = allocate_first_fit(size);
-            if (result == nullptr) throw std::bad_alloc();
+            break;
         }
 
         case (fit_mode::the_best_fit) : {
             result = allocate_best_fit(size);
-            if (result == nullptr) throw std::bad_alloc();
+            break;
         }
 
         case (fit_mode::the_worst_fit) : {
             result = allocate_worst_fit(size);
-            if (result == nullptr) throw std::bad_alloc();
+            break;
         }
     }
 
-    // auto* metadata_new_occupied_ptr = static_cast<occupied_block_metadata*>(result);
-    // void* ptr_to_next_block_or_end = nullptr;
+    if (result == nullptr) throw std::bad_alloc();
 
-    return result;
+    auto* metadata_new_occupied_ptr = static_cast<occupied_block_metadata*>(result);
+    // указатель либо на следующий занятый блок, либо на конец всего аллокатора
+    char* ptr_to_next_block_or_end = static_cast<char*>(metadata_new_occupied_ptr->next_occupied_ptr);
+    if (ptr_to_next_block_or_end == nullptr) {
+        ptr_to_next_block_or_end = static_cast<char*>(_trusted_memory) + metadata->size;
+    }
+
+    // указатель на конец только что выделенной памяти
+    char* ptr_to_end_occupied_block = static_cast<char*>(result) + metadata_new_occupied_ptr->size;
+
+    // если места не хватает для создания даже метаданных
+    if (ptr_to_next_block_or_end - ptr_to_end_occupied_block < occupied_block_metadata_size) {
+        metadata_new_occupied_ptr->size += ptr_to_next_block_or_end - ptr_to_end_occupied_block;
+    }
+
+    return static_cast<char*>(result) + occupied_block_metadata_size;
 }
 
 void allocator_boundary_tags::do_deallocate_sm(void *at)
@@ -330,8 +344,9 @@ allocator_boundary_tags::boundary_iterator::boundary_iterator(void *trusted) :
 {
     if (trusted != nullptr) {
         const allocator_metadata* metadata = static_cast<allocator_metadata*>(trusted);
-        void* ptr_to_first_block_after_allocator_metadata = static_cast<char*>(trusted) + metadata->size;
+        void* ptr_to_first_block_after_allocator_metadata = static_cast<char*>(trusted) + allocator_metadata_size;
         if (metadata->first_occupied_block == ptr_to_first_block_after_allocator_metadata) {
+            _occupied_ptr = metadata->first_occupied_block;
             _occupied = true;
         }
         else {
@@ -381,7 +396,7 @@ void *allocator_boundary_tags::allocate_first_fit(const size_t useful_size) {
             metadata_new_occupied_block = _link_new_occupied_block(ptr_to_metadata_occupied_block, need_size);
         }
 
-        return static_cast<char*>(metadata_new_occupied_block) + occupied_block_metadata_size;
+        return static_cast<char*>(metadata_new_occupied_block);
     }
 
     return nullptr;
@@ -420,7 +435,7 @@ void *allocator_boundary_tags::allocate_best_fit(const size_t useful_size) {
     }
 
     void* ptr_to_new_occupied_block = _link_new_occupied_block(ptr_to_metadata_occupied_block_before_best_free_block, need_size);
-    return static_cast<char*>(ptr_to_new_occupied_block) + occupied_block_metadata_size;
+    return static_cast<char*>(ptr_to_new_occupied_block);
 }
 
 void *allocator_boundary_tags::allocate_worst_fit(const size_t useful_size) {
@@ -456,7 +471,7 @@ void *allocator_boundary_tags::allocate_worst_fit(const size_t useful_size) {
     }
 
     void* ptr_to_new_occupied_block = _link_new_occupied_block(ptr_to_metadata_occupied_block_before_worst_free_block, need_size);
-    return static_cast<char*>(ptr_to_new_occupied_block) + occupied_block_metadata_size;
+    return static_cast<char*>(ptr_to_new_occupied_block);
 }
 
 void* allocator_boundary_tags::boundary_iterator::_get_ptr_to_end_allocator() const {
