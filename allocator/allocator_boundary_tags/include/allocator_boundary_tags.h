@@ -14,17 +14,6 @@ class allocator_boundary_tags final :
 {
 
 private:
-
-    static constexpr const size_t allocator_metadata_size = sizeof(memory_resource*) + sizeof(allocator_with_fit_mode::fit_mode) +
-                                                            sizeof(size_t) + sizeof(std::mutex) + sizeof(void*);
-
-    static constexpr const size_t occupied_block_metadata_size = sizeof(size_t) + sizeof(void*) + sizeof(void*) + sizeof(void*);
-
-    static constexpr const size_t free_block_metadata_size = 0;
-
-    void *_trusted_memory;
-
-private:
     class allocator_metadata {
     public:
         memory_resource *parent_allocator;
@@ -41,6 +30,16 @@ private:
         void* back_occupied_ptr;
         void* trusted_memory;
     };
+
+private:
+
+    static constexpr const size_t allocator_metadata_size = sizeof(allocator_metadata);
+
+    static constexpr const size_t occupied_block_metadata_size = sizeof(occupied_block_metadata);
+
+    static constexpr const size_t free_block_metadata_size = 0;
+
+    void *_trusted_memory;
 
 public:
     
@@ -79,10 +78,15 @@ private:
 
     void *allocate_worst_fit(size_t useful_size);
 
+
 public:
     
     inline void set_fit_mode(
         allocator_with_fit_mode::fit_mode mode) override;
+
+private:
+
+    void* _link_new_occupied_block(void* occupied_ptr, size_t size);
 
 public:
     
@@ -133,6 +137,12 @@ private:
         boundary_iterator(void* trusted);
 
         boundary_iterator(void* occupied_ptr, void* trusted);
+
+    private:
+
+        void* _get_ptr_to_end_allocator() const;
+
+        void* _get_ptr_to_begin_allocator() const;
     };
 
     friend class boundary_iterator;
