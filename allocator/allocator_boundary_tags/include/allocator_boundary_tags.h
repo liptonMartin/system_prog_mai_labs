@@ -76,7 +76,7 @@ private:
 
     void* allocate_best_fit(size_t useful_size);
 
-    void *allocate_worst_fit(size_t useful_size);
+    void* allocate_worst_fit(size_t useful_size);
 
 
 public:
