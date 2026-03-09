@@ -14,12 +14,29 @@ class allocator_sorted_list final:
 {
 
 private:
+
+    class allocator_metadata {
+    public:
+        std::pmr::memory_resource *parent_allocator = nullptr;
+        fit_mode fit_mode = fit_mode::first_fit;
+        size_t size = 0;
+        std::mutex mutex;
+        void* ptr_to_first_free_block = nullptr;
+    };
+
+    class block_metadata {
+    public:
+        void*ptr = nullptr;
+        size_t size = 0;
+    };
+
+private:
     
     void *_trusted_memory;
 
-    static constexpr const size_t allocator_metadata_size = sizeof(std::pmr::memory_resource *) + sizeof(fit_mode) + sizeof(size_t) + sizeof(std::mutex) + sizeof(void*);
+    static constexpr const size_t allocator_metadata_size = sizeof(allocator_metadata);
 
-    static constexpr const size_t block_metadata_size = sizeof(void*) + sizeof(size_t);
+    static constexpr const size_t block_metadata_size = sizeof(block_metadata);
 
 public:
 
@@ -56,6 +73,12 @@ private:
         allocator_with_fit_mode::fit_mode mode) override;
 
     std::vector<allocator_test_utils::block_info> get_blocks_info() const noexcept override;
+
+    void* _allocate_first_fit(size_t useful_size);
+    void* _allocate_best_fit(size_t useful_size);
+    void* _allocate_worst_fit(size_t useful_size);
+
+    void *_link_new_block(void* ptr_to_new_block, void* prev_to_free_block, const size_t useful_size);
 
 private:
 
@@ -121,6 +144,8 @@ private:
         sorted_iterator();
 
         sorted_iterator(void* trusted);
+
+        sorted_iterator(void* current_ptr, void* free_ptr, void* trusted_memory);
     };
 
     friend class sorted_iterator;
