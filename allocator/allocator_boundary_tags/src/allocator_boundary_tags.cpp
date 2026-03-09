@@ -181,7 +181,13 @@ bool allocator_boundary_tags::do_is_equal(const std::pmr::memory_resource &other
 {
     auto* other_allocator = dynamic_cast<const allocator_boundary_tags*>(&other);
     if (other_allocator != nullptr) {
-        return _trusted_memory == other_allocator->_trusted_memory;
+        auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
+        auto* metadata_other_allocator = static_cast<allocator_metadata*>(other_allocator->_trusted_memory);
+        return _trusted_memory == other_allocator->_trusted_memory &&
+        metadata_allocator->parent_allocator == metadata_other_allocator->parent_allocator &&
+            metadata_allocator->size == metadata_other_allocator->size &&
+                metadata_allocator->allocate_fit_mode == metadata_other_allocator->allocate_fit_mode &&
+                    metadata_allocator->first_occupied_block == metadata_other_allocator->first_occupied_block;
     }
     return false;
 }
