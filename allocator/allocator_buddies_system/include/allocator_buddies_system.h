@@ -37,24 +37,33 @@ class allocator_buddies_system final:
 
 private:
 
+    class allocator_metadata {
+    public:
+        std::pmr::memory_resource *parent_allocator = std::pmr::get_default_resource();
+        allocator_with_fit_mode::fit_mode fit_mode = fit_mode::first_fit;
+        unsigned char k = 0;
+        std::mutex mutex;
+    };
 
-    struct block_metadata
+    struct common_block_metadata
     {
         bool occupied : 1;
         unsigned char size : 7;
     };
 
+    class occupied_block_metadata {
+    public:
+        common_block_metadata metadata;
+        void* trusted_memory;
+    };
+
     void *_trusted_memory;
 
-    /**
-     * TODO: You must improve it for alignment support
-     */
+    static constexpr const size_t allocator_metadata_size = sizeof(allocator_metadata);
 
-    static constexpr const size_t allocator_metadata_size = sizeof(allocator_dbg_helper*) + sizeof(fit_mode) + sizeof(unsigned char) + sizeof(std::mutex);
+    static constexpr const size_t occupied_block_metadata_size = sizeof(occupied_block_metadata);
 
-    static constexpr const size_t occupied_block_metadata_size = sizeof(block_metadata) + sizeof(void*);
-
-    static constexpr const size_t free_block_metadata_size = sizeof(block_metadata);
+    static constexpr const size_t free_block_metadata_size = sizeof(common_block_metadata);
 
     static constexpr const size_t min_k = __detail::nearest_greater_k_of_2(occupied_block_metadata_size);
 
@@ -94,6 +103,13 @@ private:
 
 
     std::vector<allocator_test_utils::block_info> get_blocks_info() const noexcept override;
+
+    void* allocate_first_fit(size_t size);
+    void* allocate_best_fit(size_t size);
+    void* allocate_worst_fit(size_t size);
+
+    void* _split_free_block(void *ptr, unsigned int k);
+    void _join_free_blocks(void* ptr);
 
 private:
 
