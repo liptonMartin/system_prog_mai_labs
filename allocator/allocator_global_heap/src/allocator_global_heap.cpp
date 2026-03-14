@@ -5,24 +5,16 @@ allocator_global_heap::allocator_global_heap() = default;
 
 [[nodiscard]] void *allocator_global_heap::do_allocate_sm(size_t size)
 {
-    const size_t total_size = size_t_size + size;
+    void *ptr = ::operator new(size);
 
-    void *ptr = ::operator new(total_size);
-
-    if (ptr != nullptr) {
-        *static_cast<size_t*>(ptr) = total_size;
-        return static_cast<size_t*>(ptr) + 1;
-    }
-    return nullptr;
+    return ptr;
 }
 
 void allocator_global_heap::do_deallocate_sm(void *at)
 {
-    if (at == nullptr) return;
+    if (at == nullptr) return;;
 
-    void* ptr_with_size = static_cast<size_t*>(at) - 1;
-
-    ::operator delete(ptr_with_size);
+    ::operator delete(at);
 }
 
 allocator_global_heap::~allocator_global_heap() = default;
@@ -33,7 +25,7 @@ allocator_global_heap &allocator_global_heap::operator=(const allocator_global_h
 
 bool allocator_global_heap::do_is_equal(const std::pmr::memory_resource &other) const noexcept
 {
-    return this == &other;
+    return dynamic_cast<const allocator_global_heap*>(&other) != nullptr;
 }
 
 allocator_global_heap::allocator_global_heap(allocator_global_heap &&other) noexcept = default;
