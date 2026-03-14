@@ -3,7 +3,8 @@
 
 allocator_sorted_list::~allocator_sorted_list()
 {
-    _trusted_memory = nullptr;
+    auto* metadata = static_cast<allocator_metadata*>(_trusted_memory);
+    metadata->parent_allocator->deallocate(_trusted_memory, metadata->size);
 }
 
 allocator_sorted_list::allocator_sorted_list(
