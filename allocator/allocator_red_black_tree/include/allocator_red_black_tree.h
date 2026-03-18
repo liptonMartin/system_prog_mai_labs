@@ -23,11 +23,72 @@ private:
         block_color color : 4;
     };
 
+    /* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO ALLOCATOR FIELDS ------------------------------ */
+    std::pmr::memory_resource*& parent_allocator_ref(void* trusted);
+    fit_mode& fit_mode_ref(void* trusted);
+    size_t& size_ref(void* trusted);
+    std::mutex mutex_ref(void* trusted);
+    void*& root_ref(void* trusted);
+
+    /* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO COMMON BLOCK FIELDS ------------------------------ */
+    block_data& block_data_ref(void* block);
+    void*& prev_ref(void* block);
+    void*& next_ref(void* block);
+
+    /* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO OCCUPIED BLOCK FIELDS ------------------------------ */
+    void*& trusted_memory_ref(void* block);
+
+    /* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO FREE BLOCK FIELDS ------------------------------ */
+    void*& right_ref(void* block);
+    void*& left_ref(void* block);
+    void*& parent_ref(void* block);
+
+    struct allocator_metadata {
+        std::pmr::memory_resource *parent_allocator;
+        fit_mode mode;
+        size_t size;
+        std::mutex mutex;
+        void* root;
+    };
+
+    struct common_block_metadata {
+        block_data data;
+        void* prev;
+        void* next;
+    };
+
+    struct occupied_block_metadata {
+        common_block_metadata common_metadata;
+        void* trusted_memory;
+    };
+
+    struct free_block_metadata {
+        common_block_metadata common_metadata;
+
+        void* right;
+        void* left;
+        void* parent;
+
+        [[nodiscard]] size_t get_size(void* trusted) const;
+
+        [[nodiscard]] bool is_left_child() const;
+        [[nodiscard]] bool is_right_child() const;
+
+    };
+
+    /* ------------------------------ HELPER FUNCTIONS FOR RED BLACK TREE ------------------------------ */
+    static int compare_free_blocks(const free_block_metadata* left, const free_block_metadata* right, void* trusted);
+
+    static bool is_red_parent(free_block_metadata* node);
+    static bool is_red_right_child(free_block_metadata* node);
+    static bool is_red_left_child(free_block_metadata* node);
+
+
     void *_trusted_memory;
 
-    static constexpr const size_t allocator_metadata_size = sizeof(allocator_dbg_helper*) + sizeof(fit_mode) + sizeof(size_t) + sizeof(std::mutex) + sizeof(void*);
-    static constexpr const size_t occupied_block_metadata_size = sizeof(block_data) + 3 * sizeof(void*);
-    static constexpr const size_t free_block_metadata_size = sizeof(block_data) + 5 * sizeof(void*);
+    static constexpr const size_t allocator_metadata_size = sizeof(allocator_metadata);
+    static constexpr const size_t occupied_block_metadata_size = sizeof(occupied_block_metadata);
+    static constexpr const size_t free_block_metadata_size = sizeof(free_block_metadata);
 
 public:
     
@@ -52,6 +113,10 @@ public:
             std::pmr::memory_resource *parent_allocator = nullptr,
             allocator_with_fit_mode::fit_mode allocate_fit_mode = allocator_with_fit_mode::fit_mode::first_fit);
 
+    // для дебага (inorder обход дерева)
+    std::vector<std::pair<free_block_metadata, size_t>> free_blocks();
+    void free_blocks(free_block_metadata* current_node, std::vector<std::pair<free_block_metadata, size_t>> &result);
+
 private:
     
     [[nodiscard]] void *do_allocate_sm(
@@ -65,6 +130,23 @@ private:
     std::vector<allocator_test_utils::block_info> get_blocks_info() const override;
     
     inline void set_fit_mode(allocator_with_fit_mode::fit_mode mode) override;
+
+    void* allocate_first_fit(size_t size);
+    void* allocate_best_fit(size_t size);
+    void* allocate_worst_fit(size_t size);
+
+    void* on_block_allocate(free_block_metadata* free_block, size_t size);
+
+    void rotate_left(void* ptr);
+    void rotate_right(void* ptr);
+
+    void transplant(free_block_metadata* u, free_block_metadata* v);
+
+    void add(free_block_metadata* new_node);
+    void remove(free_block_metadata* node);
+
+    void on_node_added(free_block_metadata* new_node);
+    void on_node_removed(free_block_metadata* child);
 
 private:
 
