@@ -4,8 +4,9 @@
 
 allocator_red_black_tree::~allocator_red_black_tree()
 {
-    auto* metadata = static_cast<allocator_metadata*>(_trusted_memory);
-    metadata->parent_allocator->deallocate(_trusted_memory, metadata->size);
+    auto* parent_allocator = parent_allocator_ref(_trusted_memory);
+    auto& total_size = total_size_ref(_trusted_memory);
+    parent_allocator->deallocate(_trusted_memory, total_size);
 }
 
 allocator_red_black_tree::allocator_red_black_tree(
@@ -36,26 +37,26 @@ allocator_red_black_tree::allocator_red_black_tree(
 
     void* memory = parent_allocator->allocate(need_size);
 
-    auto* metadata = static_cast<allocator_metadata*>(memory);
-    metadata->size = need_size;
-    metadata->parent_allocator = parent_allocator;
-    metadata->mode = allocate_fit_mode;
-    metadata->root = static_cast<char*>(memory) + allocator_metadata_size;
+    total_size_ref(memory) = need_size;
+    parent_allocator_ref(memory) = parent_allocator;
+    fit_mode_ref(memory) = allocate_fit_mode;
+    root_ref(memory) = static_cast<char*>(memory) + allocator_metadata_size;
 
     // инициализируем свободный блок
-    auto* root = static_cast<free_block_metadata*>(metadata->root);
-    root->common_metadata.data.color = block_color::BLACK;
-    root->common_metadata.data.occupied = false;
+    auto* root = root_ref(memory);
+    auto& block_data_root = block_data_ref(root);
+    block_data_root.color = block_color::BLACK;
+    block_data_root.occupied = false;
 
-    root->left = nullptr;
-    root->right = nullptr;
-    root->common_metadata.next = nullptr;
-    root->common_metadata.prev = nullptr;
-    root->parent = nullptr;
+    left_ref(root) = nullptr;
+    right_ref(root) = nullptr;
+    next_ref(root) = nullptr;
+    prev_ref(root) = nullptr;
+    parent_ref(root) = nullptr;
 
-    new (&metadata->mutex) std::mutex();
+    new (&mutex_ref(memory)) std::mutex();
 
-    _trusted_memory = metadata;
+    _trusted_memory = memory;
 }
 
 allocator_red_black_tree::allocator_red_black_tree(const allocator_red_black_tree &other)
@@ -73,13 +74,7 @@ bool allocator_red_black_tree::do_is_equal(const std::pmr::memory_resource &othe
 {
     auto* other_allocator = dynamic_cast<const allocator_red_black_tree*>(&other);
     if (other_allocator != nullptr) {
-        auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-        auto* metadata_other_allocator = static_cast<allocator_metadata*>(other_allocator->_trusted_memory);
-        return _trusted_memory == other_allocator->_trusted_memory &&
-        metadata_allocator->parent_allocator == metadata_other_allocator->parent_allocator &&
-            metadata_allocator->size == metadata_other_allocator->size &&
-                metadata_allocator->mode == metadata_other_allocator->mode &&
-                    metadata_allocator->root == metadata_other_allocator->root;
+        return _trusted_memory == other_allocator->_trusted_memory;
     }
     return false;
 }
@@ -88,13 +83,11 @@ bool allocator_red_black_tree::do_is_equal(const std::pmr::memory_resource &othe
 {
     if (_trusted_memory == nullptr) return nullptr;
 
-    auto* metadata = static_cast<allocator_metadata*>(_trusted_memory);
-
-    std::lock_guard<std::mutex> lock(metadata->mutex);
+    std::lock_guard<std::mutex> lock(mutex_ref(_trusted_memory));
 
     void* result = nullptr;
 
-    switch (metadata->mode) {
+    switch (fit_mode_ref(_trusted_memory)) {
         case (fit_mode::first_fit) : {
             result = allocate_first_fit(size);
             break;
@@ -121,62 +114,51 @@ void allocator_red_black_tree::do_deallocate_sm(void *at)
 {
     if (at == nullptr) throw std::logic_error("Попытка освободить несуществующую память!");
 
-    void* ptr_metadata_deleted_block = static_cast<char*>(at) - occupied_block_metadata_size;
+    void* deleted_block = static_cast<char*>(at) - occupied_block_metadata_size;
 
-    auto* metadata_deleted_block = static_cast<occupied_block_metadata*>(ptr_metadata_deleted_block);
-    if (metadata_deleted_block->trusted_memory != _trusted_memory)
+    if (trusted_memory_ref(deleted_block) != _trusted_memory)
         throw std::logic_error("Попытка освободить чужую память!");
 
-    auto* metadata_new_free_block = static_cast<free_block_metadata *>(ptr_metadata_deleted_block);
-    metadata_new_free_block->common_metadata.data.occupied = false;
+    block_data_ref(deleted_block).occupied = false;
 
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-    std::lock_guard<std::mutex> lock(metadata_allocator->mutex);
+    std::lock_guard<std::mutex> lock(mutex_ref(_trusted_memory));
 
     // если следующий блок - свободный
-    auto* common_metadata_next_block = static_cast<common_block_metadata*>(metadata_new_free_block->common_metadata.next);
-    if (common_metadata_next_block && common_metadata_next_block->data.occupied == false) {
+    auto* next_block = next_ref(deleted_block);
+    if (next_block && block_data_ref(next_block).occupied == false) {
         // удаляем следующий блок, объединяем с текущим
-        auto* metadata_next_block = static_cast<free_block_metadata*>(metadata_new_free_block->common_metadata.next);
-        remove(metadata_next_block);
+        remove(next_block);
 
-        metadata_new_free_block->common_metadata.next = metadata_next_block->common_metadata.next;
+        next_ref(deleted_block) = next_ref(next_block);
     }
 
     // если предыдущий блок - свободный
-    auto* common_metadata_prev_block = static_cast<common_block_metadata*>(metadata_new_free_block->common_metadata.prev);
-    if (common_metadata_prev_block && common_metadata_prev_block->data.occupied == false) {
+    auto* prev_block = prev_ref(deleted_block);
+    if (prev_block && block_data_ref(prev_block).occupied == false) {
         // удаляем предыдущий блок, объедияем с текущим
-        auto* metadata_prev_block = static_cast<free_block_metadata*>(metadata_new_free_block->common_metadata.prev);
-        remove(metadata_prev_block);
+        remove(prev_block);
 
-        metadata_prev_block->common_metadata.next = metadata_new_free_block->common_metadata.next;
-        metadata_new_free_block = metadata_prev_block;
+        next_ref(prev_block) = next_ref(deleted_block);
+        deleted_block = prev_block;
     }
 
-    metadata_new_free_block->left = nullptr;
-    metadata_new_free_block->right = nullptr;
-    metadata_new_free_block->parent = nullptr;
+    left_ref(deleted_block) = nullptr;
+    right_ref(deleted_block) = nullptr;
+    parent_ref(deleted_block) = nullptr;
 
-    add(metadata_new_free_block);
+    add(deleted_block);
 }
 
 void allocator_red_black_tree::set_fit_mode(allocator_with_fit_mode::fit_mode mode)
 {
     if (_trusted_memory == nullptr) return;
-    auto* metadata = static_cast<allocator_metadata*>(_trusted_memory);
-    metadata->mode = mode;
+    fit_mode_ref(_trusted_memory) = mode;
 }
 
 
 std::vector<allocator_test_utils::block_info> allocator_red_black_tree::get_blocks_info() const
 {
-    if (_trusted_memory == nullptr) return std::vector<allocator_test_utils::block_info>();
-
-    auto* metadata = static_cast<allocator_metadata*>(_trusted_memory);
-
-    std::lock_guard<std::mutex> lock(metadata->mutex);
-
+    std::lock_guard<std::mutex> lock(mutex_ref(_trusted_memory));
     return get_blocks_info_inner();
 }
 
@@ -224,8 +206,7 @@ allocator_red_black_tree::rb_iterator &allocator_red_black_tree::rb_iterator::op
         return *this;
     }
 
-    auto* common_metadata = static_cast<common_block_metadata*>(_block_ptr);
-    _block_ptr = common_metadata->next;
+    _block_ptr = *reinterpret_cast<void**>(static_cast<char*>(_block_ptr) + sizeof(block_data) + sizeof(void*));;
     if (_block_ptr == nullptr) _trusted = nullptr;
     return *this;
 }
@@ -243,12 +224,14 @@ size_t allocator_red_black_tree::rb_iterator::size() const noexcept
 
     if (_block_ptr == nullptr) return 0;
 
-    auto* common_metadata = static_cast<common_block_metadata*>(_block_ptr);
-    void* ptr_to_next_block = common_metadata->next;
+    auto* ptr_to_next_block = *reinterpret_cast<void**>(static_cast<char*>(_block_ptr) + sizeof(block_data) + sizeof(void*));;
     if (ptr_to_next_block == nullptr) {
         // следующего нет, тогда используем указатель на конец всей памяти
-        auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted);
-        ptr_to_next_block = static_cast<char*>(_trusted) + metadata_allocator->size;
+        size_t total_size = *reinterpret_cast<size_t*>(
+                    static_cast<char*>(_trusted) +
+                    sizeof(std::pmr::memory_resource*) +
+                    sizeof(fit_mode));
+        ptr_to_next_block = static_cast<char*>(_trusted) + total_size;
     }
 
     return static_cast<char*>(ptr_to_next_block) - static_cast<char*>(_block_ptr);
@@ -270,22 +253,20 @@ allocator_red_black_tree::rb_iterator::rb_iterator(void *trusted) : _trusted(tru
 bool allocator_red_black_tree::rb_iterator::occupied() const noexcept
 {
     if (_block_ptr == nullptr) return true;
-
-    const auto* common_data = static_cast<common_block_metadata*>(_block_ptr);
-    return common_data->data.occupied;
+    auto [occupied, color] = *static_cast<block_data*>(_block_ptr);
+    return occupied;
 }
 
 /* ----------------------- ALLOCATE LOGIC -------------------------------- */
 
 void *allocator_red_black_tree::allocate_first_fit(size_t size) {
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
     const size_t need_size = size + occupied_block_metadata_size;
 
-    auto* current_node = static_cast<free_block_metadata*>(metadata_allocator->root);
+    auto* current_node = root_ref(_trusted_memory);
     while (current_node != nullptr) {
-        auto* right_child = static_cast<free_block_metadata*>(current_node->right);
+        auto* right_child = right_ref(current_node);
 
-        size_t current_size = current_node->get_size(_trusted_memory);
+        size_t current_size = get_size_block(current_node);
         if (current_size < need_size) {
             current_node = right_child;
             continue;
@@ -306,7 +287,7 @@ void *allocator_red_black_tree::allocate_worst_fit(size_t size) {
     return nullptr;
 }
 
-void *allocator_red_black_tree::on_block_allocate(free_block_metadata *free_block, const size_t size) {
+void *allocator_red_black_tree::on_block_allocate(void *free_block, const size_t size) {
     /* free_block - указатель на свободный блок, в котором достаточно места
      * size - размер, сколько нужно выделить для конечного пользователя
      * return:: указатель на метаданные блока, который надо отддать пользователю
@@ -320,167 +301,149 @@ void *allocator_red_black_tree::on_block_allocate(free_block_metadata *free_bloc
     remove(free_block);
 
     const size_t need_size = size + occupied_block_metadata_size;
-    const size_t block_size = free_block->get_size(_trusted_memory);
+    const size_t block_size = get_size_block(free_block);
 
     // проверка, нужно ли разделить два блока:
     if (need_size + free_block_metadata_size < block_size) {
         // если вмещаются еще метаданные свободного блока, то делим
 
         // находим указатель на метаданные нового блока
-        void* ptr_to_new_free_block = reinterpret_cast<char*>(free_block) + need_size;
-        auto* metadata_new_free_block = static_cast<free_block_metadata*>(ptr_to_new_free_block);
+        void* new_free_block = static_cast<char*>(free_block) + need_size;
 
-        metadata_new_free_block->common_metadata.data.occupied = false;
-        metadata_new_free_block->common_metadata.next = free_block->common_metadata.next;
-        metadata_new_free_block->common_metadata.prev = free_block;
-        metadata_new_free_block->right = nullptr;
-        metadata_new_free_block->left = nullptr;
-        metadata_new_free_block->parent = nullptr;
+        block_data_ref(new_free_block).occupied = false;
+        block_data_ref(new_free_block).color = block_color::RED;
+        next_ref(new_free_block) = next_ref(free_block);
+        prev_ref(new_free_block) = free_block;
+        right_ref(new_free_block) = nullptr;
+        left_ref(new_free_block) = nullptr;
+        parent_ref(new_free_block) = nullptr;
 
-        free_block->common_metadata.next = metadata_new_free_block;
+        next_ref(free_block) = new_free_block;
 
-        add(metadata_new_free_block);
+        add(new_free_block);
     }
 
-    auto* new_block = static_cast<occupied_block_metadata*>(static_cast<void*>(free_block));
+    auto* new_block = free_block;
 
-    new_block->trusted_memory = _trusted_memory;
-    new_block->common_metadata.data.occupied = true;
+    trusted_memory_ref(new_block) = _trusted_memory;
+    block_data_ref(new_block).occupied = true;
     return new_block;
 }
 
 /* ----------------------- RED BLACK TREE -------------------------------- */
 
-size_t allocator_red_black_tree::free_block_metadata::get_size(void* trusted) const {
-    void* ptr_to_next_block = this->common_metadata.next;
-    if (ptr_to_next_block == nullptr) {
-        // следующего нет, тогда используем указатель на конец всей памяти
-        auto* metadata_allocator = static_cast<allocator_metadata*>(trusted);
-        ptr_to_next_block = static_cast<char*>(trusted) + metadata_allocator->size;
-    }
-
-    return static_cast<char*>(ptr_to_next_block) - static_cast<const char*>(static_cast<const void*>(this));
-}
-
-int allocator_red_black_tree::compare_free_blocks(const free_block_metadata *left, const free_block_metadata *right, void *trusted) {
-    size_t left_size = left ? left->get_size(trusted) : 0;
-    size_t right_size = right ? right->get_size(trusted) : 0;
+int allocator_red_black_tree::compare_free_blocks(void *left, void *right, void *trusted) {
+    size_t left_size = left ? get_size_block(left) : 0;
+    size_t right_size = right ? get_size_block(right) : 0;
 
     if (left_size == right_size) return 0;
     if (left_size < right_size) return -1;
     return 1;
 }
 
-bool allocator_red_black_tree::is_red_parent(free_block_metadata *node) {
-    return node->parent != nullptr && static_cast<free_block_metadata*>(node->parent)->common_metadata.data.color == block_color::RED;
+bool allocator_red_black_tree::is_red_parent(void *node) {
+    auto* parent = parent_ref(node);
+    return parent != nullptr && block_data_ref(parent).color == block_color::RED;
 }
 
-bool allocator_red_black_tree::is_red_left_child(free_block_metadata *node) {
-    return node->right != nullptr && static_cast<free_block_metadata*>(node->right)->common_metadata.data.color == block_color::RED;
+bool allocator_red_black_tree::is_red_left_child(void *node) {
+    auto* left = left_ref(node);
+    return left != nullptr && block_data_ref(left).color == block_color::RED;
 }
 
-bool allocator_red_black_tree::is_red_right_child(free_block_metadata *node) {
-    return node->left != nullptr && static_cast<free_block_metadata*>(node->left)->common_metadata.data.color == block_color::RED;
+bool allocator_red_black_tree::is_red_right_child(void *node) {
+    auto* right = right_ref(node);
+    return right != nullptr && block_data_ref(right).color == block_color::RED;
 }
 
-bool allocator_red_black_tree::free_block_metadata::is_left_child() const {
-    if (parent == nullptr) return false;
-    auto* parent_metadata = static_cast<free_block_metadata*>(parent);
-    return parent_metadata->left == this;
+bool allocator_red_black_tree::is_left_child(void* node) {
+    if (parent_ref(node) == nullptr) return false;
+
+    return left_ref(parent_ref(node)) == node;
 }
 
-bool allocator_red_black_tree::free_block_metadata::is_right_child() const {
-    if (parent == nullptr) return false;
-    auto* parent_metadata = static_cast<free_block_metadata*>(parent);
-    return parent_metadata->right == this;
+bool allocator_red_black_tree::is_right_child(void* node) {
+    if (parent_ref(node) == nullptr) return false;
+
+    return right_ref(parent_ref(node)) == node;
 }
 
-void allocator_red_black_tree::rotate_left(void *ptr) {
-    auto* node = static_cast<free_block_metadata*>(ptr);
-
+void allocator_red_black_tree::rotate_left(void *node) {
     // если корень, то ничего не делаем
-    if (node->parent == nullptr) return;
+    if (parent_ref(node) == nullptr) return;
 
-    auto* parent = static_cast<free_block_metadata*>(node->parent);
+    auto* parent = parent_ref(node);
 
     // меняем у родителя родителя ссылку на ребенка
-    auto* parent_parent = static_cast<free_block_metadata*>(parent->parent);
-    if (parent->is_left_child()) parent_parent->left = ptr;
-    if (parent->is_right_child()) parent_parent->right = ptr;
+    auto* parent_parent = parent_ref(parent);
+    if (is_left_child(parent)) left_ref(parent_parent) = node;
+    if (is_right_child(parent)) right_ref(parent_parent) = node;
 
     // меняем у основного узла ссылку на родителя
-    node->parent = parent->parent;
+    parent_ref(node) = parent_ref(parent);
 
     // меняем левого потомка с правым потомком родителя
-    auto* temp = static_cast<free_block_metadata*>(node->left);
+    auto* temp = left_ref(node);
 
     // основная логика
-    node->left = parent;
-    parent->parent = node;
+    left_ref(node) = parent;
+    parent_ref(parent) = node;
 
-    parent->right = temp;
-    if (temp != nullptr) temp->parent = parent;
+    right_ref(parent) = temp;
+    if (temp != nullptr) parent_ref(temp) = parent;
 
     // если мы свапнули с корнем, то корень изменился
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-    if (parent == metadata_allocator->root) metadata_allocator->root = node;
+    if (parent == root_ref(_trusted_memory)) root_ref(_trusted_memory) = node;
 }
 
-void allocator_red_black_tree::rotate_right(void *ptr) {
-    auto* node = static_cast<free_block_metadata*>(ptr);
-
+void allocator_red_black_tree::rotate_right(void *node) {
     // если корень, то ничего не делаем
-    if (node->parent == nullptr) return;
+    if (parent_ref(node) == nullptr) return;
 
-    auto* parent = static_cast<free_block_metadata*>(node->parent);
+    auto* parent = parent_ref(node);
 
     // меняем у родителя родителя ссылку на ребенка
-    auto* parent_parent = static_cast<free_block_metadata*>(parent->parent);
-    if (parent->is_left_child()) parent_parent->left = ptr;
-    if (parent->is_right_child()) parent_parent->right = ptr;
+    auto* parent_parent = parent_ref(parent);
+    if (is_left_child(parent)) left_ref(parent_parent) = node;
+    if (is_right_child(parent)) right_ref(parent_parent) = node;
 
     // меняем у основного узла ссылку на родителя
-    node->parent = parent->parent;
+    parent_ref(node) = parent_ref(parent);
 
     // меняем правого потомка с левым потомком родителя
-    auto* temp = static_cast<free_block_metadata*>(node->right);
+    auto* temp = right_ref(node);
 
     // основная логика
-    node->right = parent;
-    parent->parent = node;
+    right_ref(node)= parent;
+    parent_ref(parent) = node;
 
-    parent->left = temp;
-    if (temp != nullptr) temp->parent = parent;
+    left_ref(parent) = temp;
+    if (temp != nullptr) parent_ref(temp) = parent;
 
     // если мы свапнули с корнем, то корень изменился
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-    if (parent == metadata_allocator->root) metadata_allocator->root = node;
+    if (parent == root_ref(_trusted_memory)) root_ref(_trusted_memory) = node;
 }
 
-void allocator_red_black_tree::transplant(free_block_metadata *u, free_block_metadata *v) {
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-
-    auto* parent = static_cast<free_block_metadata*>(u->parent);
+void allocator_red_black_tree::transplant(void *u, void *v) {
+    auto* parent = parent_ref(u);
     if (parent == nullptr)
     {
-        metadata_allocator->root = v;
+        root_ref(_trusted_memory) = v;
     }
-    else if (u->is_left_child())
+    else if (is_left_child(u))
     {
-        parent->left = v;
+        left_ref(parent) = v;
     }
     else
     {
-        parent->right = v;
+        right_ref(parent) = v;
     }
-    v->parent = parent;
+    parent_ref(v) = parent;
 }
 
-void allocator_red_black_tree::add(free_block_metadata *new_node) {
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-
-    auto* current_node = static_cast<free_block_metadata*>(metadata_allocator->root); // начинаем перебирать с корня
-    auto* left_or_right_child = static_cast<free_block_metadata*>(metadata_allocator->root); // левый или правый потомок
+void allocator_red_black_tree::add(void *new_node) {
+    auto* current_node = root_ref(_trusted_memory); // начинаем перебирать с корня
+    auto* left_or_right_child = root_ref(_trusted_memory); // левый или правый потомок
 
     // в этом подходе учтено, если дерево пустое
 
@@ -492,55 +455,53 @@ void allocator_red_black_tree::add(free_block_metadata *new_node) {
         current_node = left_or_right_child;
 
         int cmp = compare_free_blocks(new_node, left_or_right_child, _trusted_memory);
-        if (cmp <= 0) left_or_right_child = static_cast<free_block_metadata *>(left_or_right_child->left);
-        else left_or_right_child = static_cast<free_block_metadata *>(left_or_right_child->right);
+        if (cmp <= 0) left_or_right_child = left_ref(left_or_right_child);
+        else left_or_right_child = right_ref(left_or_right_child);
     }
 
     // после этого цикла currentNode - родитель нового узла
 
     // определяем родителя у нового узла
-    new_node->parent = current_node;
+    parent_ref(new_node) = current_node;
     // у родителя нового узла определяем сына (новый узел)
     int cmp = compare_free_blocks(new_node, current_node, _trusted_memory);
-    if (current_node != nullptr && cmp <= 0) current_node->left = new_node;
-    else if (current_node != nullptr && cmp > 0) current_node->right = new_node;
+    if (current_node != nullptr && cmp <= 0) left_ref(current_node) = new_node;
+    else if (current_node != nullptr && cmp > 0) right_ref(current_node) = new_node;
 
 
-    if (current_node == nullptr) metadata_allocator->root = new_node;
+    if (current_node == nullptr) root_ref(_trusted_memory) = new_node;
 
     on_node_added(new_node);
 }
 
-void allocator_red_black_tree::on_node_added(free_block_metadata *new_node) {
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-
-    if (new_node == metadata_allocator->root)
+void allocator_red_black_tree::on_node_added(void *new_node) {
+    if (new_node == root_ref(_trusted_memory))
     {
-        new_node->common_metadata.data.color = block_color::BLACK;
+        block_data_ref(new_node).color = block_color::BLACK;
         return;
     }
 
     auto* current_node = new_node;
     while (is_red_parent(current_node))
     {
-        auto* father = static_cast<free_block_metadata*>(current_node->parent);
-        auto* grandfather = static_cast<free_block_metadata*>(father->parent);
+        auto* father = parent_ref(current_node);
+        auto* grandfather = parent_ref(father);
 
-        if (father->is_left_child())
+        if (is_left_child(father))
         {
             if (is_red_right_child(grandfather))
             {
                 // если дядя тоже красный
-                auto* uncle = static_cast<free_block_metadata*>(grandfather->right);
-                uncle->common_metadata.data.color = block_color::BLACK;
-                father->common_metadata.data.color = block_color::BLACK;
-                grandfather->common_metadata.data.color = block_color::RED;
+                auto* uncle = right_ref(grandfather);
+                block_data_ref(uncle).color = block_color::BLACK;
+                block_data_ref(father).color = block_color::BLACK;
+                block_data_ref(grandfather).color = block_color::RED;
                 current_node = grandfather;
             }
             else
             // дядя черный или его нет
             {
-                if (current_node->is_right_child())
+                if (is_right_child(current_node))
                 {
                     rotate_left(current_node);
                     // Теперь father это левый потомок currentNode.
@@ -550,8 +511,8 @@ void allocator_red_black_tree::on_node_added(free_block_metadata *new_node) {
                     current_node = temp;
                 }
 
-                grandfather->common_metadata.data.color = block_color::RED;
-                father->common_metadata.data.color =  block_color::BLACK;
+                block_data_ref(grandfather).color = block_color::RED;
+                block_data_ref(father).color =  block_color::BLACK;
 
                 rotate_right(father);
 
@@ -564,16 +525,16 @@ void allocator_red_black_tree::on_node_added(free_block_metadata *new_node) {
             if (is_red_left_child(grandfather))
             {
                 // если дядя тоже красный
-                auto* uncle = static_cast<free_block_metadata*>(grandfather->left);
-                uncle->common_metadata.data.color = block_color::BLACK;
-                father->common_metadata.data.color = block_color::BLACK;
-                grandfather->common_metadata.data.color = block_color::RED;
+                auto* uncle = left_ref(grandfather);
+                block_data_ref(uncle).color = block_color::BLACK;
+                block_data_ref(father).color = block_color::BLACK;
+                block_data_ref(grandfather).color = block_color::RED;
                 current_node = grandfather;
             }
             else
             {
                 // если дяди нет, или он черный
-                if (current_node->is_left_child())
+                if (is_left_child(current_node))
                 {
                     rotate_right(current_node);
                     auto* temp = father;
@@ -581,8 +542,8 @@ void allocator_red_black_tree::on_node_added(free_block_metadata *new_node) {
                     current_node = temp;
                 }
 
-                grandfather->common_metadata.data.color = block_color::RED;
-                father->common_metadata.data.color = block_color::BLACK;
+                block_data_ref(grandfather).color = block_color::RED;
+                block_data_ref(father).color = block_color::BLACK;
 
                 rotate_left(father);
 
@@ -591,186 +552,184 @@ void allocator_red_black_tree::on_node_added(free_block_metadata *new_node) {
             }
         }
     }
-    if (metadata_allocator->root != nullptr) {
-        auto* root = static_cast<free_block_metadata *>(metadata_allocator->root);
-        root->common_metadata.data.color = block_color::BLACK;
+    if (root_ref(_trusted_memory) != nullptr) {
+        auto* root = root_ref(_trusted_memory);
+        block_data_ref(root).color = block_color::BLACK;
     }
 }
 
-void allocator_red_black_tree::remove(free_block_metadata *node) {
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-    auto* root = static_cast<free_block_metadata *>(metadata_allocator->root);
+void allocator_red_black_tree::remove(void *node) {
+    auto* root = root_ref(_trusted_memory);
 
     // у узла нет детей
-    if (node->left == nullptr && node->right == nullptr)
+    if (left_ref(node) == nullptr && right_ref(node) == nullptr)
     {
-        if (node->common_metadata.data.color == block_color::BLACK) on_node_removed(node);
+        if (block_data_ref(node).color == block_color::BLACK) on_node_removed(node);
 
-        if (node->is_left_child()) {
-            auto* parent = static_cast<free_block_metadata*>(node->parent);
-            parent->left = nullptr;
+        if (is_left_child(node)) {
+            auto* parent = parent_ref(node);
+            left_ref(parent) = nullptr;
         }
-        else if (node->is_right_child()) {
-            auto* parent = static_cast<free_block_metadata*>(node->parent);
-            parent->right = nullptr;
+        else if (is_right_child(node)) {
+            auto* parent = parent_ref(node);
+            right_ref(parent) = nullptr;
         }
-        else metadata_allocator->root = nullptr; // удалили корень
+        else root_ref(_trusted_memory) = nullptr; // удалили корень
 
-        if (metadata_allocator->root != nullptr) {
-            root->common_metadata.data.color = block_color::BLACK;
+        if (root_ref(_trusted_memory) != nullptr) {
+            block_data_ref(root).color = block_color::BLACK;
         }
 
-        node->parent = nullptr;
+        parent_ref(node) = nullptr;
     }
 
     // у узла есть только правый ребенок
-    else if (node->left == nullptr && node->right != nullptr)
+    else if (left_ref(node) == nullptr && right_ref(node) != nullptr)
     {
-        auto* right = static_cast<free_block_metadata *>(node->right);
+        auto* right = right_ref(node);
         transplant(node, right);
 
-        if (node->common_metadata.data.color == block_color::BLACK) on_node_removed(right);
+        if (block_data_ref(node).color == block_color::BLACK) on_node_removed(right);
 
-        root->common_metadata.data.color = block_color::BLACK;
+        block_data_ref(root).color = block_color::BLACK;
 
-        node->right = nullptr;
-        node->parent = nullptr;
+        right_ref(node) = nullptr;
+        parent_ref(node) = nullptr;
     }
 
     // у узла есть только левый ребенок
-    else if (node->left != nullptr && node->right == nullptr)
+    else if (left_ref(node) != nullptr && right_ref(node) == nullptr)
     {
-        auto* left = static_cast<free_block_metadata *>(node->left);
+        auto* left = left_ref(node);
         transplant(node, left);
 
-        if (node->common_metadata.data.color == block_color::BLACK) on_node_removed(left);
+        if (block_data_ref(node).color == block_color::BLACK) on_node_removed(left);
 
-        root->common_metadata.data.color = block_color::BLACK;
+        block_data_ref(root).color = block_color::BLACK;
 
-        node->left = nullptr;
-        node->parent = nullptr;
+        left_ref(node) = nullptr;
+        parent_ref(node) = nullptr;
     }
 
     // два ребенка у узла
     else
     {
-        auto* most_left_node_in_right_subtree = static_cast<free_block_metadata*>(node->right);
+        auto* most_left_node_in_right_subtree = right_ref(node);
 
-        while (most_left_node_in_right_subtree->left != nullptr)
+        while (left_ref(most_left_node_in_right_subtree) != nullptr)
         {
-            most_left_node_in_right_subtree = static_cast<free_block_metadata *>(most_left_node_in_right_subtree->left);
+            most_left_node_in_right_subtree = left_ref(most_left_node_in_right_subtree);
         }
 
-        auto* parent_delete_node =  static_cast<free_block_metadata*>(most_left_node_in_right_subtree->parent);
-        auto* child_most_left_node_in_right_subtree = static_cast<free_block_metadata *>(most_left_node_in_right_subtree->right);
-        if (most_left_node_in_right_subtree == node->right)
+        auto* parent_delete_node = parent_ref(most_left_node_in_right_subtree);
+        auto* child_most_left_node_in_right_subtree = right_ref(most_left_node_in_right_subtree);
+        if (most_left_node_in_right_subtree == right_ref(node))
         {
             parent_delete_node = most_left_node_in_right_subtree;
         }
         else // mostLeftNodeInRightSubtree != node.Right
         {
-            parent_delete_node->left = child_most_left_node_in_right_subtree;
-            if (child_most_left_node_in_right_subtree) child_most_left_node_in_right_subtree->parent = parent_delete_node;
+            left_ref(parent_delete_node) = child_most_left_node_in_right_subtree;
+            if (child_most_left_node_in_right_subtree) parent_ref(child_most_left_node_in_right_subtree) = parent_delete_node;
         }
 
 
         transplant(node, most_left_node_in_right_subtree);
 
-        auto* node_left = static_cast<free_block_metadata *>(node->left);
-        most_left_node_in_right_subtree->left = node_left;
-        if (node_left) node_left->parent = most_left_node_in_right_subtree;
+        auto* node_left = left_ref(node);
+        left_ref(most_left_node_in_right_subtree) = node_left;
+        if (node_left) parent_ref(node_left) = most_left_node_in_right_subtree;
 
 
-        if (most_left_node_in_right_subtree == node->right)
+        if (most_left_node_in_right_subtree == right_ref(node))
         {
-            auto* node_right = static_cast<free_block_metadata *>(node->right);
-            most_left_node_in_right_subtree->right = node_right->right;
+            auto* node_right = right_ref(node);
+            right_ref(most_left_node_in_right_subtree) = right_ref(node_right);
         }
         else
         {
-            most_left_node_in_right_subtree->right = node->right;
+            right_ref(most_left_node_in_right_subtree) = right_ref(node);
         }
-        auto* new_right_node = static_cast<free_block_metadata *>(most_left_node_in_right_subtree->right);
-        if (new_right_node) new_right_node->parent = most_left_node_in_right_subtree;
+        auto* new_right_node = right_ref(most_left_node_in_right_subtree);
+        if (new_right_node) parent_ref(new_right_node) = most_left_node_in_right_subtree;
 
         // заполнение для того, чтобы вызвать метод on_node_deleted
         if (child_most_left_node_in_right_subtree == nullptr)
         {
             child_most_left_node_in_right_subtree = node;
-            child_most_left_node_in_right_subtree->parent = parent_delete_node;
+            parent_ref(child_most_left_node_in_right_subtree) = parent_delete_node;
 
             if (parent_delete_node == most_left_node_in_right_subtree)
             {
-                parent_delete_node->right = child_most_left_node_in_right_subtree;
+                right_ref(parent_delete_node) = child_most_left_node_in_right_subtree;
             }
             else
             {
-                parent_delete_node->left = child_most_left_node_in_right_subtree;
+                left_ref(parent_delete_node) = child_most_left_node_in_right_subtree;
             }
         }
 
-        if (most_left_node_in_right_subtree->common_metadata.data.color == block_color::BLACK)
+        if (block_data_ref(most_left_node_in_right_subtree).color == block_color::BLACK)
             on_node_removed(child_most_left_node_in_right_subtree);
 
         if (child_most_left_node_in_right_subtree == node)
         {
-            child_most_left_node_in_right_subtree->right = nullptr;
-            auto* child_parent = static_cast<free_block_metadata *>(child_most_left_node_in_right_subtree->parent);
-            if (child_most_left_node_in_right_subtree->is_left_child()) child_parent->left = nullptr;
-            else if (child_most_left_node_in_right_subtree->is_right_child()) child_parent->right = nullptr;
+            right_ref(child_most_left_node_in_right_subtree) = nullptr;
+            auto* child_parent = parent_ref(child_most_left_node_in_right_subtree);
+            if (is_left_child(child_most_left_node_in_right_subtree)) left_ref(child_parent) = nullptr;
+            else if (is_right_child(child_most_left_node_in_right_subtree)) right_ref(child_parent) = nullptr;
 
-            child_most_left_node_in_right_subtree->parent = nullptr;
+            parent_ref(child_most_left_node_in_right_subtree) = nullptr;
         }
 
-        node->right = nullptr;
-        node->left = nullptr;
-        node->parent = nullptr;
+        right_ref(node) = nullptr;
+        left_ref(node) = nullptr;
+        parent_ref(node) = nullptr;
 
-        root->common_metadata.data.color = block_color::BLACK;
+        block_data_ref(root).color = block_color::BLACK;
     }
 }
 
-void allocator_red_black_tree::on_node_removed(free_block_metadata *child) {
+void allocator_red_black_tree::on_node_removed(void *child) {
     if (child == nullptr) return; // балансировка не нужна
 
-    auto* metadata_allocator = static_cast<allocator_metadata*>(_trusted_memory);
-    auto* root = static_cast<free_block_metadata *>(metadata_allocator->root);
+    auto* root = root_ref(_trusted_memory);
 
-    while (child->common_metadata.data.color == block_color::BLACK && child != root)
+    while (block_data_ref(child).color == block_color::BLACK && child != root)
     {
-        if (child->is_left_child())
+        if (is_left_child(child))
         {
-            auto* father = static_cast<free_block_metadata *>(child->parent);
-            auto* brother = static_cast<free_block_metadata *>(father->right);
+            auto* father = parent_ref(child);
+            auto* brother = right_ref(father);
 
-            if (brother != nullptr && brother->common_metadata.data.color == block_color::RED)
+            if (brother != nullptr && block_data_ref(brother).color == block_color::RED)
                 // случай 1: есть красный брат, надо повернуть дерево
             {
-                father->common_metadata.data.color = block_color::RED;
-                brother->common_metadata.data.color = block_color::BLACK;
+                block_data_ref(father).color = block_color::RED;
+                block_data_ref(brother).color = block_color::BLACK;
                 rotate_left(brother);
 
                 // после поворота изменился брат
-                brother = static_cast<free_block_metadata *>(father->right);
+                brother = right_ref(father);
             }
 
 
             if (brother == nullptr)
             {
-                father->common_metadata.data.color = block_color::BLACK;
+                block_data_ref(father).color = block_color::BLACK;
                 child = father;
                 continue;
             }
 
             // случай 2: брат черный
             // случай 2.1: у брата оба черных ребенка (в том числе если их нет, ведь лист черного цвета)
-            auto* left_child_brother = static_cast<free_block_metadata *>(brother->left); // левый ребенок брата
-            auto* right_child_brother = static_cast<free_block_metadata *>(brother->right); // правый ребенок брата
+            auto* left_child_brother = left_ref(brother); // левый ребенок брата
+            auto* right_child_brother = right_ref(brother); // правый ребенок брата
 
-            if ((left_child_brother == nullptr || left_child_brother->common_metadata.data.color == block_color::BLACK) &&
-                (right_child_brother == nullptr || right_child_brother->common_metadata.data.color == block_color::BLACK))
+            if ((left_child_brother == nullptr || block_data_ref(left_child_brother).color == block_color::BLACK) &&
+                (right_child_brother == nullptr || block_data_ref(right_child_brother).color == block_color::BLACK))
             {
-                brother->common_metadata.data.color = block_color::RED;
+                block_data_ref(brother).color = block_color::RED;
 
                 child = father;
             }
@@ -779,23 +738,23 @@ void allocator_red_black_tree::on_node_removed(free_block_metadata *child) {
             // у брата есть хотя бы один не черный ребенок
             {
                 // случай 2.2: у брата правый ребенок черный, а левый красный
-                if (left_child_brother != nullptr && left_child_brother->common_metadata.data.color == block_color::RED &&
-                    (right_child_brother == nullptr || right_child_brother->common_metadata.data.color == block_color::BLACK))
+                if (left_child_brother != nullptr && block_data_ref(left_child_brother).color == block_color::RED &&
+                    (right_child_brother == nullptr || block_data_ref(right_child_brother).color == block_color::BLACK))
                 {
-                    brother->common_metadata.data.color = block_color::RED;
-                    left_child_brother->common_metadata.data.color = block_color::BLACK;
+                    block_data_ref(brother).color = block_color::RED;
+                    block_data_ref(left_child_brother).color = block_color::BLACK;
 
                     rotate_right(left_child_brother);
 
                     brother = left_child_brother;
-                    right_child_brother =  static_cast<free_block_metadata *>(brother->right);
-                    left_child_brother = static_cast<free_block_metadata *>(brother->left);
+                    right_child_brother =  right_ref(brother);
+                    left_child_brother = left_ref(brother);
                 }
 
                 // случай 2.3: у брата правый ребенок красный, а левый черный
-                brother->common_metadata.data.color = father->common_metadata.data.color;
-                father->common_metadata.data.color = block_color::BLACK;
-                right_child_brother->common_metadata.data.color = block_color::BLACK;
+                block_data_ref(brother).color = block_data_ref(father).color;
+                block_data_ref(father).color = block_color::BLACK;
+                block_data_ref(right_child_brother).color = block_color::BLACK;
 
                 rotate_left(brother);
 
@@ -804,18 +763,18 @@ void allocator_red_black_tree::on_node_removed(free_block_metadata *child) {
         }
         else // child.IsRightChild
         {
-            auto* father = static_cast<free_block_metadata *>(child->parent);
-            auto* brother = static_cast<free_block_metadata *>(father->left);
+            auto* father = parent_ref(child);
+            auto* brother = left_ref(father);
 
-            if (brother != nullptr && brother->common_metadata.data.color == block_color::RED)
+            if (brother != nullptr && block_data_ref(brother).color == block_color::RED)
                 // случай 1: есть красный брат, надо повернуть дерево
             {
-                father->common_metadata.data.color = block_color::RED;
-                brother->common_metadata.data.color = block_color::BLACK;
+                block_data_ref(father).color = block_color::RED;
+                block_data_ref(brother).color = block_color::BLACK;
                 rotate_right(brother);
 
                 // после поворота изменился брат
-                brother = static_cast<free_block_metadata *>(father->left);
+                brother = left_ref(father);
             }
 
             if (brother == nullptr)
@@ -826,13 +785,13 @@ void allocator_red_black_tree::on_node_removed(free_block_metadata *child) {
 
             // случай 2: брат черный
             // случай 2.1: у брата оба черных ребенка (в том числе если их нет, ведь лист черного цвета)
-            auto* left_child_brother = static_cast<free_block_metadata*>(brother->left); // левый ребенок брата
-            auto* right_child_brother = static_cast<free_block_metadata*>(brother->right); // правый ребенок брата
+            auto* left_child_brother = left_ref(brother); // левый ребенок брата
+            auto* right_child_brother = right_ref(brother); // правый ребенок брата
 
-            if ((left_child_brother == nullptr || left_child_brother->common_metadata.data.color == block_color::BLACK) &&
-                (right_child_brother == nullptr || right_child_brother->common_metadata.data.color == block_color::BLACK))
+            if ((left_child_brother == nullptr || block_data_ref(left_child_brother).color == block_color::BLACK) &&
+                (right_child_brother == nullptr || block_data_ref(right_child_brother).color == block_color::BLACK))
             {
-                brother->common_metadata.data.color = block_color::RED;
+                block_data_ref(brother).color = block_color::RED;
 
                 child = father;
             }
@@ -841,23 +800,23 @@ void allocator_red_black_tree::on_node_removed(free_block_metadata *child) {
                 // у брата есть хотя бы один не черный ребенок
             {
                 // случай 2.2: у брата левый ребенок черный, а правый красный
-                if (right_child_brother != nullptr && right_child_brother->common_metadata.data.color == block_color::RED &&
-                    (left_child_brother == nullptr || left_child_brother->common_metadata.data.color == block_color::BLACK))
+                if (right_child_brother != nullptr && block_data_ref(right_child_brother).color == block_color::RED &&
+                    (left_child_brother == nullptr || block_data_ref(left_child_brother).color == block_color::BLACK))
                 {
-                    brother->common_metadata.data.color = block_color::RED;
-                    right_child_brother->common_metadata.data.color = block_color::BLACK;
+                    block_data_ref(brother).color = block_color::RED;
+                    block_data_ref(right_child_brother).color = block_color::BLACK;
 
                     rotate_left(right_child_brother);
 
                     brother = right_child_brother;
-                    left_child_brother =  static_cast<free_block_metadata *>(brother->left);
-                    right_child_brother = static_cast<free_block_metadata *>(brother->right);
+                    left_child_brother = left_ref(brother);
+                    right_child_brother = right_ref(brother);
                 }
 
                 // случай 2.3: у брата левый ребенок красный, а правый черный
-                brother->common_metadata.data.color = father->common_metadata.data.color;
-                father->common_metadata.data.color = block_color::BLACK;
-                left_child_brother->common_metadata.data.color = block_color::BLACK;
+                block_data_ref(brother).color = block_data_ref(father).color;
+                block_data_ref(father).color = block_color::BLACK;
+                block_data_ref(left_child_brother).color = block_color::BLACK;
 
                 rotate_right(brother);
 
@@ -867,20 +826,111 @@ void allocator_red_black_tree::on_node_removed(free_block_metadata *child) {
         }
     }
 
-    child->common_metadata.data.color = block_color::BLACK;
-    root->common_metadata.data.color = block_color::BLACK;
+    block_data_ref(child).color = block_color::BLACK;
+    block_data_ref(root).color = block_color::BLACK;
 }
 
-std::vector<std::pair<allocator_red_black_tree::free_block_metadata, size_t>> allocator_red_black_tree::free_blocks() {
-    std::vector<std::pair<free_block_metadata, size_t>> result;
-    auto* metadata = static_cast<allocator_metadata *>(_trusted_memory);
+std::vector<allocator_red_black_tree::free_block_debug_struct> allocator_red_black_tree::free_blocks() {
+    std::vector<free_block_debug_struct> result;
 
-    if (metadata->root != nullptr) free_blocks(static_cast<free_block_metadata *>(metadata->root), result);
+    if (root_ref(_trusted_memory) != nullptr) free_blocks(root_ref(_trusted_memory), result);
     return result;
 }
 
-void allocator_red_black_tree::free_blocks(free_block_metadata* current_node, std::vector<std::pair<free_block_metadata, size_t>> &result) {
-    if (current_node->right != nullptr) free_blocks(static_cast<free_block_metadata *>(current_node->right), result);
-    result.emplace_back(*current_node, current_node->get_size(_trusted_memory));
-    if (current_node->left != nullptr) free_blocks(static_cast<free_block_metadata *>(current_node->left), result);
+void allocator_red_black_tree::free_blocks(void* current_node, std::vector<free_block_debug_struct> &result) {
+    if (left_ref(current_node) != nullptr) free_blocks(left_ref(current_node), result);
+    free_block_debug_struct free_block{};
+    free_block.color = block_data_ref(current_node).color;
+    free_block.left = left_ref(current_node);
+    free_block.right = right_ref(current_node);
+    free_block.parent = parent_ref(current_node);
+    free_block.next = next_ref(current_node);
+    free_block.prev = prev_ref(current_node);
+    free_block.size = get_size_block(current_node);
+    result.push_back(free_block);
+    if (right_ref(current_node) != nullptr) free_blocks(right_ref(current_node), result);
+}
+
+
+/* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO ALLOCATOR FIELDS ------------------------------ */
+std::pmr::memory_resource*& allocator_red_black_tree::parent_allocator_ref(void* trusted) {
+    return *reinterpret_cast<std::pmr::memory_resource**>(trusted);
+}
+
+allocator_with_fit_mode::fit_mode& allocator_red_black_tree::fit_mode_ref(void* trusted) {
+    return *reinterpret_cast<allocator_with_fit_mode::fit_mode*>(
+        static_cast<char*>(trusted) + sizeof(std::pmr::memory_resource*));
+}
+
+size_t& allocator_red_black_tree::total_size_ref(void* trusted) {
+    return *reinterpret_cast<size_t*>(
+        static_cast<char*>(trusted) +
+        sizeof(std::pmr::memory_resource*) +
+        sizeof(fit_mode));
+}
+
+std::mutex& allocator_red_black_tree::mutex_ref(void* trusted) const {
+    return *reinterpret_cast<std::mutex*>(
+        static_cast<char*>(trusted) +
+        sizeof(std::pmr::memory_resource*) +
+        sizeof(fit_mode) +
+        sizeof(size_t));
+}
+
+void*& allocator_red_black_tree::root_ref(void* trusted) {
+    return *reinterpret_cast<void**>(
+        static_cast<char*>(trusted)
+        + sizeof(std::pmr::memory_resource*)
+        + sizeof(allocator_with_fit_mode::fit_mode)
+        + sizeof(size_t)
+        + sizeof(std::mutex));
+}
+
+
+/* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO COMMON BLOCK FIELDS ------------------------------ */
+
+allocator_red_black_tree::block_data& allocator_red_black_tree::block_data_ref(void* block) {
+    return *reinterpret_cast<block_data*>(block);
+}
+
+void*& allocator_red_black_tree::prev_ref(void* block) {
+    return *reinterpret_cast<void**>(static_cast<char*>(block) + sizeof(block_data));
+}
+
+void*& allocator_red_black_tree::next_ref(void* block) {
+    return *reinterpret_cast<void**>(static_cast<char*>(block) + sizeof(block_data) + sizeof(void*));
+}
+
+// void* const& allocator_red_black_tree::next_ref(const void* block) const {
+//     return *reinterpret_cast<void* const*>(static_cast<const char*>(block) + sizeof(block_data) + sizeof(void*));
+// }
+
+size_t allocator_red_black_tree::get_size_block(void* block) {
+    auto* ptr_to_next_block = next_ref(block);
+    if (ptr_to_next_block == nullptr) {
+        // следующего нет, тогда используем указатель на конец всей памяти
+        ptr_to_next_block = static_cast<char*>(_trusted_memory) + total_size_ref(_trusted_memory);
+    }
+
+    return static_cast<const char*>(ptr_to_next_block) - static_cast<char*>(block);
+}
+
+/* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO OCCUPIED BLOCK FIELDS ------------------------------ */
+
+void*& allocator_red_black_tree::trusted_memory_ref(void* block) {
+    return *reinterpret_cast<void**>(static_cast<char*>(block) + sizeof(block_data) + 2 * sizeof(void*));
+}
+
+/* ------------------------------ HELPER FUNCTIONS FOR ACCESS TO FREE BLOCK FIELDS ------------------------------ */
+
+void*& allocator_red_black_tree::right_ref(void* block) {
+    return *reinterpret_cast<void**>(static_cast<char*>(block) + sizeof(block_data) + 4 * sizeof(void*));
+}
+
+void*& allocator_red_black_tree::left_ref(void* block) {
+    return *reinterpret_cast<void**>(static_cast<char*>(block) + sizeof(block_data) + 3 * sizeof(void*));
+}
+
+void*& allocator_red_black_tree::parent_ref(void* block) {
+    return *reinterpret_cast<void**>(static_cast<char*>(block) + sizeof(block_data) + 2 * sizeof(void*));
 }
