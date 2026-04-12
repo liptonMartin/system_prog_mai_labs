@@ -552,7 +552,6 @@ B_tree<tkey, tvalue, compare, t>::B_tree(
             : compare(cmp), _allocator(alloc), _root(nullptr), _size(0)
 {
     for (auto it = begin; it != end; ++it) {
-        // TODO: после реализации итераторов, проверить правильно ли разыменовывается
         insert(*it);
     }
 }
