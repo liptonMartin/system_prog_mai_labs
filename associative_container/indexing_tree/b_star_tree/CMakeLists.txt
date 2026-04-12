@@ -28,3 +28,12 @@ target_link_directories(
         PUBLIC
         ${Boost_LIBRARY_DIR}
 )
+
+add_executable(
+        b_star_tree main.cpp
+)
+target_link_libraries(
+        b_star_tree
+        PRIVATE
+        sys_prog_assctv_cntnr_indxng_tr_b_str_tr
+)
