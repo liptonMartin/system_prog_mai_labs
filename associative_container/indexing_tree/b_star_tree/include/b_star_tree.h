@@ -23,9 +23,11 @@ public:
 
 private:
 
-    // TODO: Another restrictions
-    static constexpr const size_t minimum_keys_in_node = t - 1;
-    static constexpr const size_t maximum_keys_in_node = 2 * t - 1;
+    static constexpr const size_t minimum_keys_in_node = 2 * t - 1;
+    static constexpr const size_t maximum_keys_in_node = 3 * t - 1;
+
+    static constexpr const size_t minimum_keys_in_root = 1;
+    static constexpr const size_t maximum_keys_in_root = 4 * t - 1;
 
     // region comparators declaration
 
@@ -351,12 +353,25 @@ public:
     // endregion modifiers declaration
 };
 
+// region base constructors and getters impl
+
 template<std::input_iterator iterator, comparator<typename std::iterator_traits<iterator>::value_type::first_type> compare = std::less<typename std::iterator_traits<iterator>::value_type::first_type>,
         std::size_t t = 5, typename U>
 BS_tree(iterator begin, iterator end, const compare &cmp = compare(), pp_allocator<U> = pp_allocator<U>()) -> BS_tree<typename std::iterator_traits<iterator>::value_type::first_type, typename std::iterator_traits<iterator>::value_type::second_type, compare, t>;
 
 template<typename tkey, typename tvalue, comparator<tkey> compare = std::less<tkey>, std::size_t t = 5, typename U>
 BS_tree(std::initializer_list<std::pair<tkey, tvalue>> data, const compare &cmp = compare(), pp_allocator<U> = pp_allocator<U>()) -> BS_tree<tkey, tvalue, compare, t>;
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+pp_allocator<typename BS_tree<tkey, tvalue, compare, t>::value_type> BS_tree<tkey, tvalue, compare, t>::
+get_allocator() const noexcept
+{
+    return _allocator;
+}
+
+// endregion base constructors impl
+
+// region comparators impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 bool BS_tree<tkey, tvalue, compare, t>::compare_pairs(const BS_tree::tree_data_type &lhs,
@@ -366,17 +381,25 @@ bool BS_tree<tkey, tvalue, compare, t>::compare_pairs(const BS_tree::tree_data_t
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-BS_tree<tkey, tvalue, compare, t>::bstree_node::bstree_node() noexcept
+bool BS_tree<tkey, tvalue, compare, t>::compare_keys(const tkey &lhs, const tkey &rhs) const
 {
-    throw not_implemented("too laazyy", "your code should be here...");
+    return compare::operator()(lhs, rhs);
 }
 
+// endregion comparators impl
+
+// region bstree_node constructor impl
+
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-pp_allocator<typename BS_tree<tkey, tvalue, compare, t>::value_type> BS_tree<tkey, tvalue, compare, t>::
-get_allocator() const noexcept
+BS_tree<tkey, tvalue, compare, t>::bstree_node::bstree_node() noexcept
 {
-    throw not_implemented("too laazyy", "your code should be here...");
+    _keys = boost::container::static_vector<tree_data_type, maximum_keys_in_node + 1>{};
+    _pointers = boost::container::static_vector<bstree_node*, maximum_keys_in_node + 2>{};
 }
+
+// endregion bstree_node constructor impl
+
+// region common iterator impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator::reference BS_tree<tkey, tvalue, compare, t>::
@@ -462,6 +485,10 @@ BS_tree<tkey, tvalue, compare, t>::bstree_iterator::bstree_iterator(
 {
     throw not_implemented("too laazyy", "your code should be here...");
 }
+
+// endregion common iterator impl
+
+// region const iterator impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::bstree_const_iterator::bstree_const_iterator(const bstree_iterator &it) noexcept
@@ -553,6 +580,10 @@ BS_tree<tkey, tvalue, compare, t>::bstree_const_iterator::bstree_const_iterator(
 {
     throw not_implemented("too laazyy", "your code should be here...");
 }
+
+// endregion const iterator impl
+
+// region reverse iterator impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::bstree_reverse_iterator::bstree_reverse_iterator(const bstree_iterator &it) noexcept
@@ -650,6 +681,10 @@ BS_tree<tkey, tvalue, compare, t>::bstree_reverse_iterator::bstree_reverse_itera
 {
     throw not_implemented("too laazyy", "your code should be here...");
 }
+
+// endregion reverse iterator impl
+
+// region reverse const iterator impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::bstree_const_reverse_iterator::bstree_const_reverse_iterator(
@@ -749,11 +784,9 @@ BS_tree<tkey, tvalue, compare, t>::bstree_const_reverse_iterator::bstree_const_r
     throw not_implemented("too laazyy", "your code should be here...");
 }
 
-template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-bool BS_tree<tkey, tvalue, compare, t>::compare_keys(const tkey &lhs, const tkey &rhs) const
-{
-    return compare::operator()(lhs, rhs);
-}
+// endregion reverse const iterator impl
+
+// region constructors impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::BS_tree(const compare& cmp, pp_allocator<value_type> alloc)
@@ -779,6 +812,10 @@ BS_tree<tkey, tvalue, compare, t>::BS_tree(std::initializer_list<std::pair<tkey,
 {
     throw not_implemented("template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> BS_tree<tkey, tvalue, compare, t>::BS_tree(std::initializer_list<std::pair<tkey, tvalue>> data, const compare& cmp, pp_allocator<value_type> alloc)", "your code should be here...");
 }
+
+// endregion constructors impl
+
+// region five impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::BS_tree(const BS_tree& other)
@@ -810,6 +847,10 @@ BS_tree<tkey, tvalue, compare, t>::~BS_tree() noexcept
     throw not_implemented("template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> BS_tree<tkey, tvalue, compare, t>::~BS_tree() noexcept", "your code should be here...");
 }
 
+// endregion five impl
+
+// region element access impl
+
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 tvalue& BS_tree<tkey, tvalue, compare, t>::at(const tkey& key)
 {
@@ -833,6 +874,10 @@ tvalue& BS_tree<tkey, tvalue, compare, t>::operator[](tkey&& key)
 {
     throw not_implemented("template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> tvalue& BS_tree<tkey, tvalue, compare, t>::operator[](tkey&& key)", "your code should be here...");
 }
+
+// endregion element access impl
+
+// region iterator begins impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::begin()
@@ -906,6 +951,10 @@ typename BS_tree<tkey, tvalue, compare, t>::bstree_const_reverse_iterator BS_tre
     throw not_implemented("template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BS_tree<tkey, tvalue, compare, t>::bstree_const_reverse_iterator BS_tree<tkey, tvalue, compare, t>::crend() const", "your code should be here...");
 }
 
+// endregion iterator begins impl
+
+// region lookup impl
+
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 size_t BS_tree<tkey, tvalue, compare, t>::size() const noexcept
 {
@@ -959,6 +1008,10 @@ bool BS_tree<tkey, tvalue, compare, t>::contains(const tkey& key) const
 {
     throw not_implemented("template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> bool BS_tree<tkey, tvalue, compare, t>::contains(const tkey& key) const", "your code should be here...");
 }
+
+// endregion lookup impl
+
+// region modifiers impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::clear() noexcept
@@ -1035,5 +1088,7 @@ typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue
             "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::erase(const tkey& key)",
             "your code should be here...");
 }
+
+// endregion modifiers impl
 
 #endif
