@@ -824,7 +824,13 @@ B_tree<tkey, tvalue, compare, t>::btree_iterator::operator--(int)
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 bool B_tree<tkey, tvalue, compare, t>::btree_iterator::operator==(const self& other) const noexcept
 {
-    return _path.top() == other._path.top() && _index == other._index;
+    if (!_path.empty() && !other._path.empty()) {
+        return _path.top() == other._path.top() && _index == other._index;
+    }
+    if (_path.empty() && other._path.empty()) {
+        return _index == other._index;
+    }
+    return false;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1340,21 +1346,38 @@ typename B_tree<tkey, tvalue, compare, t>::btree_iterator B_tree<tkey, tvalue, c
     if (!_root) return end();
 
     int index = 0;
-    btree_node* node = _root;
+    btree_node** node = &_root;
     std::stack<std::pair<btree_node**, size_t>> path;
-    do {
-        node = node->_pointers[index];
-        path.emplace(&node, index);
-        index = 0;
-        for (int i = 0; i < node->_keys.size(); ++i) {
-            if (compare_keys(node->_keys[i].first, key) == 0) /* node->_keys[i].first == key */
-                return btree_iterator(path, i);
-            if (compare_keys(node->_keys[i].first, key) > 0) /* node->_keys[i].first > key */ break;
 
-            ++index; /* просто проходимся по соседним элементам */
+    while (node != nullptr) {
+        path.emplace(node, index);
+
+        int l = 0;
+        int r = (*node)->_keys.size();
+
+        while (l + 1 < r) {
+            int m = (l + r) / 2;
+
+            if (less_or_equal((*node)->_keys[m].first, key)) {
+                l = m;
+            }
+            else {
+                r = m;
+            }
         }
-    } while (index < node->_pointers.size() && node->_pointers[index] != nullptr);
-    return btree_iterator(path, index);
+
+        if (equal((*node)->_keys[l].first, key)) return btree_iterator(path, l);
+
+        if ((*node)->_pointers.empty() || less(key, (*node)->_keys[0].first)) --l; /* нужно перейти в самого первого сына
+                                                                                    * или мы дошли до листа */
+
+        node = (*node)->_pointers.empty() ? nullptr : &((*node)->_pointers[l + 1]);
+        index = l + 1;
+    }
+
+    node = path.top().first;
+    if (equal((*node)->_keys[index].first, key)) return btree_iterator(path, index);
+    return end(); /* дошли до конца и не нашли */
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1533,7 +1556,7 @@ void B_tree<tkey, tvalue, compare, t>::erase_from_leaf(std::stack<std::pair<btre
 
     auto [node, _] = path.top();
 
-    (*node)->_keys.erase(index);
+    (*node)->_keys.erase((*node)->_keys.begin() + index);
 
     rebalancing_after_erase(path);
 }
@@ -1551,13 +1574,13 @@ void B_tree<tkey, tvalue, compare, t>::erase_from_internal_node(std::stack<std::
     auto [node, _] = path.top();
 
     /* пытаемся найти самый левый элемент в правом поддереве */
-    if (index < node->_keys.size()) {
+    if (index < (*node)->_keys.size()) {
         auto most_left_element_right_subtree = (*node)->_pointers[index + 1];
+        path.emplace(&most_left_element_right_subtree, index + 1);
         while (!most_left_element_right_subtree->_pointers.empty()) {
-            path.emplace(&most_left_element_right_subtree, 0);
             most_left_element_right_subtree = most_left_element_right_subtree->_pointers[0];
+            path.emplace(&most_left_element_right_subtree, 0);
         }
-        path.emplace(&most_left_element_right_subtree, 0);
 
         (*node)->_keys[index] = most_left_element_right_subtree->_keys[0]; /* замена */
 
@@ -1568,14 +1591,13 @@ void B_tree<tkey, tvalue, compare, t>::erase_from_internal_node(std::stack<std::
     /* пытаемся найти самый правый элемент в левом поддереве */
     if (index != 0) {
         auto most_right_element_left_subtree = (*node)->_pointers[index - 1];
+        path.emplace(&most_right_element_left_subtree, index - 1);
         while (!most_right_element_left_subtree->_pointers.empty()) {
             auto index_last_child = most_right_element_left_subtree->_pointers.size() - 1;
 
-            path.emplace(&most_right_element_left_subtree, index_last_child);
             most_right_element_left_subtree = most_right_element_left_subtree->_pointers[index_last_child];
+            path.emplace(&most_right_element_left_subtree, index_last_child);
         }
-        path.emplace(&most_right_element_left_subtree, most_right_element_left_subtree->_pointers.size() - 1);
-
 
         auto index_last_element = most_right_element_left_subtree->_keys.size() - 1;
         (*node)->_keys[index] = most_right_element_left_subtree->_keys[index_last_element]; /* замена */
@@ -1597,8 +1619,8 @@ void B_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::p
     if ((*node)->_keys.size() >= minimum_keys_in_node) return;
 
     if (path.empty()) {
-        if ( (*node)->_keys.size() > 0) return;
-        throw std::logic_error("Балансировка от пустого корня! Это нужно отхендлить ранее!");
+        if ( *node == _root) return;
+        throw std::logic_error("Балансировка от пустого узла! И это не корень!");
     }
 
     /* здесь в node лежит слишком мало элементов */
@@ -1614,17 +1636,15 @@ void B_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::p
          */
 
         auto left_brother = (*parent)->_pointers[parent_index - 1];
-        if (!left_brother->_keys.empty()) {
-            auto most_right_element = left_brother->_keys.back();
-            left_brother->_keys.pop_back();
+        auto most_right_element = left_brother->_keys.back();
+        left_brother->_keys.pop_back();
 
-            (*parent)->_keys.insert( (*parent)->_keys.begin(), most_right_element );
-        }
+        auto most_left_element_parent = (*parent)->_keys.front();
+        (*parent)->_keys.erase( (*parent)->_keys.begin() );
 
-        auto most_right_element_parent = (*parent)->_keys.back();
-        (*parent)->_keys.pop_back();
+        (*parent)->_keys.insert( (*parent)->_keys.begin(), most_right_element );
 
-        (*node)->_keys.insert( (*node)->_keys.begin(), most_right_element_parent );
+        (*node)->_keys.insert( (*node)->_keys.begin(), most_left_element_parent );
 
         if (!left_brother->_pointers.empty()) {
             auto most_right_child_in_left_brother = left_brother->_pointers.back();
@@ -1636,25 +1656,23 @@ void B_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::p
     }
 
     /* у левого соседа занять не получилось, пробуем занять у правого соседа */
-    /* если правый сосед существует, то наш элемент не последний (parent_index != maximum_keys_in_node + 1) */
-    if (parent_index != maximum_keys_in_node + 1 && (*parent)->_pointers[parent_index + 1]->_keys.size() > minimum_keys_in_node) {
+    /* если правый сосед существует, то наш элемент не последний (parent_index < (*parent)->_pointers.size() - 1) */
+    if (parent_index < (*parent)->_pointers.size() - 1 && (*parent)->_pointers[parent_index + 1]->_keys.size() > minimum_keys_in_node) {
         /*
          * у правого соседа занимаем самый левый элемент, добавляем его как последний элемент в родителя
          * добавляем в текущий узел первый узел родителя
          */
 
         auto right_brother = (*parent)->_pointers[parent_index + 1];
-        if (!right_brother->_keys.empty()) {
-            auto most_left_element = right_brother->_keys.front();
-            right_brother->_keys.erase( right_brother->_keys.begin() );
+        auto most_left_element = right_brother->_keys.front();
+        right_brother->_keys.erase( right_brother->_keys.begin() );
 
-            (*parent)->_keys.push_front( most_left_element );
-        }
+        auto most_right_element_parent = (*parent)->_keys.back();
+        (*parent)->_keys.pop_back();
 
-        auto most_left_element_parent = (*parent)->_keys.front();
-        (*parent)->_keys.erase( (*parent)->_keys.begin() );
+        (*parent)->_keys.push_back( most_left_element );
 
-        (*node)->_keys.push_back(most_left_element_parent);
+        (*node)->_keys.push_back(most_right_element_parent);
 
         if (!right_brother->_pointers.empty()) {
             auto most_left_child_in_right_brother = right_brother->_pointers.front();
@@ -1679,7 +1697,7 @@ void B_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::p
         /* добавляем ключ-разделитель с родителя */
         auto node_split_parent = (*parent)->_keys[parent_index - 1];
         (*node)->_keys.insert( (*node)->_keys.begin(), node_split_parent );
-        (*parent)->_keys.erase(parent_index - 1);
+        (*parent)->_keys.erase( (*parent)->_keys.begin() + parent_index - 1);
 
         /* добавляем весь соседний левый узел */
         auto left_brother = (*parent)->_pointers[parent_index - 1];
@@ -1689,7 +1707,7 @@ void B_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::p
         (*node)->_pointers.insert( (*node)->_pointers.begin(), left_brother->_pointers.begin(), left_brother->_pointers.end() );
 
         /* удаляем одного ребенка из родительского узла (левого соседа) */
-        (*parent)->_pointers.erase(parent_index - 1);
+        (*parent)->_pointers.erase((*parent)->_pointers.begin() + parent_index - 1);
 
         if (*parent == _root && (*parent)->_keys.empty()) {
             /* если мы заняли у корня, в котором не осталось ключей, то новый корень это наш node */
@@ -1701,11 +1719,11 @@ void B_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::p
     }
 
     /* пытаемся объединиться с правым соседом */
-    else if (parent_index != maximum_keys_in_node + 1) {
+    else if (parent_index < (*parent)->_pointers.size()) {
         /* добавляем ключ-разделить с родителя */
-        auto node_split_parent = (*parent)->_keys[parent_index + 1];
+        auto node_split_parent = (*parent)->_keys[parent_index];
         (*node)->_keys.push_back(node_split_parent);
-        (*parent)->_keys.erase(parent_index + 1);
+        (*parent)->_keys.erase((*parent)->_keys.begin() + parent_index);
 
         /* добавляем весь соседний правый узел */
         auto right_brother = (*parent)->_pointers[parent_index + 1];
@@ -1715,7 +1733,7 @@ void B_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::p
         (*node)->_pointers.insert( (*node)->_pointers.end(), right_brother->_pointers.begin(), right_brother->_pointers.end() );
 
         /* удаляем одного ребенка из родительского узла (правого соседа) */
-        (*parent)->_pointers.erase(parent_index + 1);
+        (*parent)->_pointers.erase((*parent)->_pointers.begin() + parent_index + 1);
 
         if (*parent == _root && (*parent)->_keys.empty()) {
             /* если мы заняли у корня, в котором не осталось ключей, то новый корень это наш node */
@@ -1819,13 +1837,15 @@ B_tree<tkey, tvalue, compare, t>::erase(btree_iterator pos)
     if (pos == end()) throw std::invalid_argument("Такого ключа не существует!");
 
     auto path = pos._path;
+    auto index = pos._index;
 
-    auto [node, index] = path.top();
+    auto [node, _] = path.top();
+    auto key = (*node)->_keys[index].first;
 
-    if ((*node.first)->_pointers.empty()) erase_from_leaf(path, index);
+    if ((*node)->_pointers.empty()) erase_from_leaf(path, index);
     else erase_from_internal_node(path, index);
 
-    return upper_bound((*node)->_keys[index]);
+    return upper_bound(key);
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>

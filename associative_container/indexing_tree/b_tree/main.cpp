@@ -6,35 +6,29 @@
 
 int main() {
 
-    B_tree<int, int, std::less<>, 2> tree;
+    B_tree<int, int, std::less<>, 3> tree;
 
-    B_tree<int, int, std::less<>, 2>::tree_data_type data {1, 1};
-    B_tree<int, int, std::less<>, 2>::tree_data_type data_2 {2, 1};
-    B_tree<int, int, std::less<>, 2>::tree_data_type data_3 {3, 1};
-    B_tree<int, int, std::less<>, 2>::tree_data_type data_4 {4, 1};
-    B_tree<int, int, std::less<>, 2>::tree_data_type data_5 {5, 1};
+    tree.emplace(1, 1);
+    tree.emplace(2, 2);
+    tree.emplace(3, 3);
+    tree.emplace(4, 4);
+    tree.emplace(5, 5);
 
-    tree.insert(std::move(data));
-    tree.insert(std::move(data_2));
+    tree.emplace(10, 10);
+    tree.emplace(15, 15);
+    tree.emplace(14, 14);
+    tree.emplace(8, 8);
+    tree.emplace(9, 9);
 
-    // tree.print_tree();
+    tree.emplace(6, 6);
+    tree.emplace(7, 7);
+    tree.emplace(20, 20);
+    tree.emplace(18, 18);
+    tree.emplace(19, 19);
 
-    tree.insert(std::move(data_3));
-    tree.insert(std::move(data_4));
-    tree.insert(std::move(data_5));
+    tree.erase(tree.find(4));
 
-    tree.emplace(-1, 1);
-    tree.emplace(10, 1);
-    tree.emplace(15, 1);
-    tree.emplace(6, 1);
-
-    tree.emplace(7, 1);
-
-    tree.emplace(9, 1);
-
-    tree.emplace(0, 1);
-
-
+    tree.print_tree();
 
     return 0;
 }
