@@ -1109,7 +1109,6 @@ BS_tree<tkey, tvalue, compare, t>::BS_tree(
             : compare(cmp), _allocator(alloc), _root(nullptr), _size(0)
 {
     for (auto it = begin; it != end; ++it) {
-        // TODO: после реализации итераторов, проверить правильно ли разыменовывается
         insert(*it);
     }
 }
@@ -1164,7 +1163,6 @@ void BS_tree<tkey, tvalue, compare, t>::delete_node(bstree_node *node) noexcept 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::BS_tree(const BS_tree& other) : compare(other), _allocator(other._allocator), _root(nullptr), _size(other._size)
 {
-    // TODO: create clone_node
     _root = clone_node(other._root);
 }
 
