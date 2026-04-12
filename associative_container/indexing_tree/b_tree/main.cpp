@@ -26,9 +26,16 @@ int main() {
     tree.emplace(18, 18);
     tree.emplace(19, 19);
 
-    tree.erase(tree.find(4));
-
-    tree.print_tree();
+    // tree.erase(tree.find(4));
+    //
+    // tree.print_tree();
+    //
+    //
+    auto const_iterator = tree.cbegin();
+    while (const_iterator != tree.cend()) {
+        std::cout << "key: " << const_iterator->first << " value: " << const_iterator->second <<  "\n";
+        ++const_iterator;
+    }
 
     return 0;
 }
