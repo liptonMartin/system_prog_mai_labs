@@ -45,8 +45,8 @@ private:
 
     struct bstree_node
     {
-        boost::container::static_vector<tree_data_type, maximum_keys_in_node + 1> _keys;
-        boost::container::static_vector<bstree_node*, maximum_keys_in_node + 2> _pointers;
+        boost::container::static_vector<tree_data_type, maximum_keys_in_root + 1> _keys;
+        boost::container::static_vector<bstree_node*, maximum_keys_in_root + 2> _pointers;
         bstree_node() noexcept;
     };
 
@@ -55,6 +55,30 @@ private:
     size_t _size;
 
     pp_allocator<value_type> get_allocator() const noexcept;
+
+
+    // region helper functions for five
+
+    bstree_node* clone_node(bstree_node* node);
+    void delete_node(bstree_node* node) noexcept;
+
+    // endregion
+
+    // region helper functions for iterators
+
+    template<typename ptr_to_ptr_to_node>
+    static void increment_iterator_inner(std::stack<std::pair<ptr_to_ptr_to_node, size_t>>&path, size_t& index);
+
+    template<typename ptr_to_ptr_to_node>
+    static void decrement_iterator_inner(std::stack<std::pair<ptr_to_ptr_to_node, size_t>>&path, size_t& index);
+
+    std::stack<std::pair<bstree_node**, size_t>> path_begin();
+    std::stack<std::pair<bstree_node**, size_t>> path_reverse_begin();
+
+    // endregion
+
+
+public:
 
     // region debug functions declaration
 
@@ -103,32 +127,9 @@ private:
     }
 
     void print_tree();
-    void print_node(bstree_node* node, int depth);
+    void print_node(bstree_node* node, int depth = 0);
 
-    // endregion
-
-    // region helper functions for five
-
-    bstree_node* clone_node(bstree_node* node);
-    void delete_node(bstree_node* node) noexcept;
-
-    // endregion
-
-    // region helper functions for iterators
-
-    template<typename ptr_to_ptr_to_node>
-    static void increment_iterator_inner(std::stack<std::pair<ptr_to_ptr_to_node, size_t>>&path, size_t& index);
-
-    template<typename ptr_to_ptr_to_node>
-    static void decrement_iterator_inner(std::stack<std::pair<ptr_to_ptr_to_node, size_t>>&path, size_t& index);
-
-    std::stack<std::pair<bstree_node**, size_t>> path_begin();
-    std::stack<std::pair<bstree_node**, size_t>> path_reverse_begin();
-
-    // endregion
-
-
-public:
+    // endregion debug functions declaration
 
     // region constructors declaration
 
@@ -430,6 +431,16 @@ public:
     bstree_iterator erase(const tkey& key);
 
     // endregion modifiers declaration
+
+private:
+    // region helper functions for insert declaration
+    bstree_iterator search_terminate_node_to_insert(tkey key);
+    void rebalancing_after_insert(std::stack<std::pair<bstree_node**, size_t>>&path);
+    void split(bstree_node**left, bstree_node**right, bstree_node**parent, size_t index_split_parent);
+    void handle_rebalancing_root();
+
+    // endregion helper functions for insert declaration
+
 };
 
 // region base constructors and getters impl
@@ -1476,7 +1487,8 @@ BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare
     }
 
     auto iterator = bstree_iterator(path, index);
-    if ((*iterator).first == key) return iterator;
+    /* в случае (index == 0 && key < (*iterator).first) мы уже находимся на элементе, который больше нашего */
+    if ((*iterator).first == key || (index == 0 && key < (*iterator).first)) return iterator;
     return ++iterator; /* следующий элемент */
 }
 
@@ -1514,6 +1526,263 @@ bool BS_tree<tkey, tvalue, compare, t>::contains(const tkey& key) const
 
 // region modifiers impl
 
+// region helper functions for insert impl
+
+/**
+ * Ищет место (лист), в которое надо вставить новый узел
+ *
+ * @param key Ключ, по которому нужно найти место
+ * @return Возвращает итератор на то место, куда надо вставить узел. Возвращает end() в случае, если дерево пустое.
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::search_terminate_node_to_insert(tkey key) {
+    auto iterator = lower_bound(key);
+
+    if (iterator == end() && _root != nullptr) {
+        /* дерево не пустое, но нужно вставить в последний элемент */
+        auto path = path_reverse_begin();
+        auto [node, _] = path.top();
+        auto index = (*node)->_keys.size();
+        return bstree_iterator(path_reverse_begin(), index);
+    }
+    if (iterator == end()) return iterator; /* дерево пустое */
+
+    /* случай, когда элемент был последним в узле, lower_bound вернул ++iterator, который теперь указывает на внутренний узел,
+     * но нам нужно пойти именно назад, причем в индекс самый последний (по аналогии с предыдущим аналогом)!
+     */
+    if (iterator != begin() && !iterator.is_terminate_node() && key < iterator->first) {
+        --iterator;
+        auto path = iterator._path;
+        auto [node, _] = path.top();
+        auto index = (*node)->_keys.size();
+        return bstree_iterator(path, index);
+    }
+    /* теперь нужно спуститься в лист */
+    /* итератор всегда пойдет сначала в лист, в самый первый элемент, это нам и надо */
+    while (!iterator.is_terminate_node()) ++iterator;
+
+    return iterator;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_insert(std::stack<std::pair<bstree_node**, size_t>>& path) {
+    /* уже вставили в узел, который мог переполниться */
+
+    auto [node, parent_index] = path.top();
+    path.pop();
+
+    if ( (*node)->_keys.size() <= maximum_keys_in_node ) return; /* балансировка не нужна */
+
+    if ( (*node) == _root && (*node)->_keys.size() <= maximum_keys_in_root) return; /* балансировка не нужна */
+    if (*node == _root) {
+        /* балансировка нужна корню */
+        handle_rebalancing_root();
+        return;
+    }
+
+    auto [parent, parent_parent_index] = path.top();
+    /* хотим отдать правому брату */
+    if (parent_index < (*parent)->_pointers.size() - 1) {
+        auto right_brother = (*parent)->_pointers[parent_index + 1];
+
+        if (right_brother->_keys.size() < maximum_keys_in_node) {
+            /*
+             * удаляем последний элемент из node,
+             * добавляем его в родителя по индексу, между текущим узлом и его правым братом (parent_index),
+             * добавляем старый элемент родителя, как первый элемент в правого брата
+             */
+
+            auto last_element_node = (*node)->_keys.back(); /* запомнили элемент из текущего узла */
+            (*node)->_keys.pop_back();
+
+            auto element_from_parent = (*parent)->_keys[parent_index]; /* запомнили элемент из родителя */
+            (*parent)->_keys[parent_index] = last_element_node; /* заменяем элемент в родителе */
+
+            right_brother->_keys.insert( right_brother->_keys.begin(), element_from_parent ); /* добавили в брата элемент из родителя */
+
+            /* если мы находимся во внутренних узлах */
+            if (!((*node)->_pointers.empty())) {
+                auto last_child_node = (*node)->_pointers.back();
+                (*node)->_pointers.pop_back();
+
+                right_brother->_pointers.insert(right_brother->_pointers.begin(), last_child_node);
+            }
+
+            return;
+        }
+    }
+
+    /* правому брату отдать не получилось, пытаемся отдать левому брату */
+    if (parent_index > 0) {
+        auto left_brother = (*parent)->_pointers[parent_index - 1];
+
+        if (left_brother->_keys.size() < maximum_keys_in_node) {
+            /*
+             * удаляем первый элемент из node,
+             * добавляем его в родителя по индексу, который разделяем текущий узел и левого брата
+             * старый узел из родителя добавляем как последний элемент в левого брата
+             *
+             * переприсваиваем детей по случаю
+             */
+
+            auto first_element_node = (*node)->_keys.front();
+            (*node)->_keys.erase((*node)->_keys.begin());
+
+            auto element_from_parent = (*parent)->_keys[parent_index - 1];
+            (*parent)->_keys[parent_index - 1] = first_element_node;
+
+            left_brother->_keys.push_back(element_from_parent);
+
+            /* если находимся во внутреннем узле */
+            if (!((*node)->_pointers.empty())) {
+                auto first_child_node = (*node)->_pointers.front();
+                (*node)->_pointers.erase((*node)->_pointers.begin());
+
+                left_brother->_pointers.push_back(first_child_node);
+            }
+
+            return;
+        }
+    }
+
+    /* братья сами переполнены, поэтому пытаемся создать из двух узлов три */
+    /* пытаемся соединиться с правым братом */
+    if (parent_index < (*parent)->_pointers.size() - 1) {
+        auto right_brother = (*parent)->_pointers[parent_index + 1];
+
+        split(node, &right_brother, parent, parent_index);
+        rebalancing_after_insert(path);
+        return;
+    }
+
+    /* пытаемся соединиться с левым братом */
+    if (parent_index > 0) {
+        auto left_brother = (*parent)->_pointers[parent_index - 1];
+
+        split(&left_brother, node, parent, parent_index - 1);
+        rebalancing_after_insert(path);
+        return;
+    }
+
+    throw std::logic_error("У узла нет соседей и это не корень!");
+}
+
+
+/**
+ * В корне произошло переполнение, эта функция делит корень на 3 узла
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BS_tree<tkey, tvalue, compare, t>::handle_rebalancing_root() {
+    auto index_middle_element = _root->_keys.size() / 2;
+
+    auto new_root = get_allocator().template new_object<bstree_node>();
+    auto second_node = get_allocator().template new_object<bstree_node>();
+    auto first_node = _root;
+
+    new_root->_keys.push_back(_root->_keys[index_middle_element]);
+    new_root->_pointers.push_back(_root);
+    new_root->_pointers.push_back(second_node);
+
+    _root = new_root;
+
+    second_node->_keys.insert(
+        second_node->_keys.begin(), first_node->_keys.begin() + index_middle_element + 1, first_node->_keys.end());
+    /* удаляем еще и средний элемент */
+    first_node->_keys.erase(first_node->_keys.begin() + index_middle_element, first_node->_keys.end());
+
+    if (!first_node->_pointers.empty()) {
+        second_node->_pointers.insert(
+            second_node->_pointers.begin(), first_node->_pointers.begin() + index_middle_element + 1, first_node->_pointers.end());
+        first_node->_pointers.erase(first_node->_pointers.begin() + index_middle_element + 1, first_node->_pointers.end());
+    }
+}
+
+/**
+ * Разделяет два узла left и right на три узла left, middle, right
+ *
+ * @param left Узел, который находится слева
+ * @param right Узел, который находится справа
+ * @param parent Узел-родитель
+ * @param index_split_parent Индекс элемента в родителе, который находится между left и right
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BS_tree<tkey, tvalue, compare, t>::split(bstree_node**left, bstree_node**right, bstree_node**parent, size_t index_split_parent) {
+    /* разделяющий элемент в родителе */
+    auto parent_split_element = (*parent)->_keys[index_split_parent];
+    (*parent)->_keys.erase((*parent)->_keys.begin() + index_split_parent);
+
+    constexpr auto index_split_element_node = 2 * t; /* элемент разделитель с первого узла */
+    auto first_element_to_add_parent = (*left)->_keys[index_split_element_node];
+
+    /*
+     * в случае, если переполнен левый узел, то тогда правый разделитель имеет индекс t - 1
+     * в случае, если переполнен правый узел, то тогда правый разделитель имеет индекс t
+     */
+    auto index_split_element_right = t; /* элемент разделитель со второго узла */
+    if ((*left)->_keys.size() >= maximum_keys_in_node + 1) index_split_element_right = t - 1;
+
+    auto second_element_to_add_parent = (*right)->_keys[index_split_element_right];
+
+    /* удаляем после всего, чтобы не нарушилась проверка на индекс правого элемента */
+    (*left)->_keys.erase((*left)->_keys.begin() + index_split_element_node);
+    (*right)->_keys.erase((*right)->_keys.begin() + index_split_element_right);
+
+    auto middle_node = get_allocator().template new_object<bstree_node>();
+
+    /* заполняем средний узел */
+    int i = index_split_element_node;
+    for (int _ = index_split_element_node; _ < (*left)->_keys.size(); ++_) {
+        /* не изменяется переменная i, потому что мы делаем erase и все элементы сдвигаются */
+        auto element = (*left)->_keys[i];
+        (*left)->_keys.erase((*left)->_keys.begin() + i);
+        middle_node->_keys.push_back(element);
+
+        if (!((*left)->_pointers.empty())) {
+            auto child = (*left)->_pointers[i];
+            middle_node->_pointers.push_back(child);
+            (*left)->_pointers.erase((*left)->_pointers.begin() + i);
+        }
+    }
+    /* добавляем последнего ребенка узла в средний узел, если он есть */
+    if (!((*left)->_pointers.empty())) {
+        auto child = (*left)->_pointers.back();
+        middle_node->_pointers.push_back(child);
+        (*left)->_pointers.pop_back();
+    }
+
+    /* добавляем родительский узел */
+    middle_node->_keys.push_back(parent_split_element);
+
+    /* добавляем первого ребенка брата в средний узел, если он есть */
+    if (!(*right)->_pointers.empty()) {
+        auto child = (*right)->_pointers.front();
+        middle_node->_pointers.push_back(child);
+        (*right)->_pointers.erase((*right)->_pointers.begin());
+    }
+    i = 0;
+    for (int _ = 0; _ < index_split_element_right; ++_) {
+        /* аналогично как и выше, переменная i не изменяется, потому что мы выполняем erase и элементы сдвигаются */
+        auto element = (*right)->_keys[i];
+        (*right)->_keys.erase((*right)->_keys.begin() + i);
+        middle_node->_keys.push_back(element);
+
+        if (!((*right)->_pointers.empty())) {
+            auto child = (*right)->_pointers[i];
+            middle_node->_pointers.push_back(child);
+            (*right)->_pointers.erase((*right)->_pointers.begin() + i);
+        }
+    }
+
+    /* заполняем родителя */
+    (*parent)->_keys.insert((*parent)->_keys.begin() + index_split_parent, first_element_to_add_parent);
+    (*parent)->_keys.insert((*parent)->_keys.begin() + index_split_parent + 1, second_element_to_add_parent);
+
+    /* распределяем детей */
+    (*parent)->_pointers.insert((*parent)->_pointers.begin() + index_split_parent + 1, middle_node);
+}
+
+// endregion
+
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::clear() noexcept
 {
@@ -1538,9 +1807,29 @@ std::pair<typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator, bool> BS_
 {
     tree_data_type data(std::forward<Args>(args)...);
 
-    auto iterator = lower_bound(data.first);
+    auto found_key = find(data.first);
+    if (found_key != end()) return {found_key, false};
 
-    return std::pair<bstree_iterator, bool> {begin(), true};
+    auto iterator = search_terminate_node_to_insert(data.first);
+
+    if (iterator == end()) {
+        /* дерево было пустым, надо создать новый элемент */
+        auto node = get_allocator().template new_object<bstree_node>();
+        _root = node;
+        std::stack<std::pair<bstree_node**, size_t>> path;
+        path.emplace(&node, 0);
+        iterator = bstree_iterator(path, 0);
+    }
+
+    auto path = iterator._path;
+    auto index = iterator._index;
+
+    auto [node, _] = path.top();
+    (*node)->_keys.insert((*node)->_keys.begin() + index, data);
+
+    rebalancing_after_insert(path);
+
+    return {find(data.first), true};
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
