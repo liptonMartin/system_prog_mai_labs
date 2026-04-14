@@ -1390,13 +1390,7 @@ BS_tree<tkey, tvalue, compare, t>::bstree_const_reverse_iterator BS_tree<tkey, t
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 size_t BS_tree<tkey, tvalue, compare, t>::size() const noexcept
 {
-    size_t count = 0;
-    auto iterator = begin();
-    while ( iterator != end() ) {
-        ++count;
-        ++iterator;
-    }
-    return count;
+    return _size;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1829,6 +1823,7 @@ std::pair<typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator, bool> BS_
 
     rebalancing_after_insert(path);
 
+    ++_size;
     return {find(data.first), true};
 }
 
@@ -1854,6 +1849,7 @@ BS_tree<tkey, tvalue, compare, t>::bstree_iterator  BS_tree<tkey, tvalue, compar
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::erase(bstree_iterator pos)
 {
+    // TODO: не забыть написать --_size;
     throw not_implemented("template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::erase(bstree_iterator pos)", "your code should be here...");
 }
 

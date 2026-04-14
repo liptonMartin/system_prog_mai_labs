@@ -9,11 +9,11 @@ int main() {
 
     srand(10);
     int min = 1;
-    int max = 100;
+    int max = 500;
 
     std::set<int> added_numbers;
 
-    for (int i = 0; i < 60; ++i) {
+    for (int i = 0; i < 200; ++i) {
         auto number = min + rand() % (max - min + 1);
         std::cout << "Add a number: " << ' ' << number << '\n';
         added_numbers.insert(number);
@@ -22,6 +22,7 @@ int main() {
     std::cout << "Added numbers (" << added_numbers.size() << "): ";
     for (auto item : added_numbers) std::cout << item << ' ';
     std::cout << '\n';
+    std::cout << "Tree size: " << tree.size() << '\n';
     tree.print_tree();
 
     return 0;
