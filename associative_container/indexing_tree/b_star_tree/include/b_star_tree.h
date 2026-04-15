@@ -452,7 +452,7 @@ private:
 
     bool is_right_brother_exist(bstree_node** parent, size_t index);
     bool is_left_brother_exist(size_t index);
-    bool is_node_fill(bstree_node** node);
+    bool is_node_has_more_minimum_keys(bstree_node** node);
 
     void train_from_right_brother(bstree_node** node, bstree_node** right_brother, bstree_node** parent, size_t parent_index);
     void train_from_left_brother(bstree_node** node, bstree_node** left_brother, bstree_node** parent, size_t parent_index);
@@ -1866,7 +1866,7 @@ void BS_tree<tkey, tvalue, compare, t>::erase_from_leaf(std::stack<std::pair<bst
     /* пробуем занять у правого брата */
     if (is_right_brother_exist(parent, parent_index)) {
         auto right_brother = (*parent)->_pointers[parent_index]; // TODO: check it!
-        if (!is_node_fill(right_brother)) {
+        if (!is_node_has_more_minimum_keys(right_brother)) {
             /* можно занять у правого брата */
             train_from_right_brother(node, right_brother, parent_index); // TODO: check index!
             return;
@@ -1876,7 +1876,7 @@ void BS_tree<tkey, tvalue, compare, t>::erase_from_leaf(std::stack<std::pair<bst
         /* занять у правого брата не получилось, пробуем у правого двоюродного брата */
         if (is_right_brother_exist(right_brother, parent_index + 1)) {
             auto right_right_brother = (*parent)->_pointers[parent_index + 1]; // TODO: check it!
-            if (!is_node_fill(right_right_brother)) {
+            if (!is_node_has_more_minimum_keys(right_right_brother)) {
                 /* можно занять у двоюродного брата */
                 train_from_right_right_brother(node, right_brother, right_right_brother, parent, parent_index);
                 return;
@@ -1887,7 +1887,7 @@ void BS_tree<tkey, tvalue, compare, t>::erase_from_leaf(std::stack<std::pair<bst
     /* занять справа не получилось, занимаем слева */
     if (is_left_brother_exist(parent_index)) {
         auto left_brother = (*parent)->_pointers[parent_index - 1]; // TODO: check it!
-        if (!is_node_fill(left_brother)) {
+        if (!is_node_has_more_minimum_keys(left_brother)) {
             /* можно занять у левого брата */
             train_from_left_brother(node, left_brother, parent_index - 1); // TODO: check it!
             return;
@@ -1896,7 +1896,7 @@ void BS_tree<tkey, tvalue, compare, t>::erase_from_leaf(std::stack<std::pair<bst
         /* занять у левого брата не получилось, пробуем занять у левого двоюродного брата */
         if (is_left_brother_exist(parent_index - 1 - 1)) {
             auto left_left_brother = (*parent)->_pointers[parent_index - 1 - 1];
-            if (!is_node_fill(left_left_brother)) {
+            if (!is_node_has_more_minimum_keys(left_left_brother)) {
                 /* можно занять у левого двоюродного брата */
                 train_from_left_left_brother(node, left_brother, left_left_brother, parent, parent_index - 1);
                 return;
@@ -1978,8 +1978,8 @@ bool BS_tree<tkey, tvalue, compare, t>::is_left_brother_exist(size_t index) {
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-bool BS_tree<tkey, tvalue, compare, t>::is_node_fill(bstree_node** node) {
-    return (*node)->_keys.size() >= maximum_keys_in_node;
+bool BS_tree<tkey, tvalue, compare, t>::is_node_has_more_minimum_keys(bstree_node** node) {
+    return (*node)->_keys.size() > minimum_keys_in_node;
 }
 
 /**
