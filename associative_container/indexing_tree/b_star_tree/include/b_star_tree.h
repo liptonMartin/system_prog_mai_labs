@@ -1872,17 +1872,17 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
     auto [parent, _] = path.top();
     /* пробуем занять у правого брата */
     if (is_right_brother_exist(parent, parent_index)) {
-        auto right_brother = (*parent)->_pointers[parent_index]; // TODO: check it!
+        auto right_brother = &(*parent)->_pointers[parent_index]; // TODO: check it!
         if (!is_node_has_more_minimum_keys(right_brother)) {
             /* можно занять у правого брата */
-            train_from_right_brother(node, right_brother, parent_index); // TODO: check index!
+            train_from_right_brother(node, right_brother, parent, parent_index); // TODO: check index!
             return;
         }
 
 
         /* занять у правого брата не получилось, пробуем у правого двоюродного брата */
         if (is_right_brother_exist(right_brother, parent_index + 1)) {
-            auto right_right_brother = (*parent)->_pointers[parent_index + 1]; // TODO: check it!
+            auto right_right_brother = &(*parent)->_pointers[parent_index + 1]; // TODO: check it!
             if (!is_node_has_more_minimum_keys(right_right_brother)) {
                 /* можно занять у двоюродного брата */
                 train_from_right_right_brother(node, right_brother, right_right_brother, parent, parent_index);
@@ -1893,16 +1893,16 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
 
     /* занять справа не получилось, занимаем слева */
     if (is_left_brother_exist(parent_index)) {
-        auto left_brother = (*parent)->_pointers[parent_index - 1]; // TODO: check it!
+        auto left_brother = &(*parent)->_pointers[parent_index - 1]; // TODO: check it!
         if (!is_node_has_more_minimum_keys(left_brother)) {
             /* можно занять у левого брата */
-            train_from_left_brother(node, left_brother, parent_index - 1); // TODO: check it!
+            train_from_left_brother(node, left_brother, parent, parent_index - 1); // TODO: check it!
             return;
         }
 
         /* занять у левого брата не получилось, пробуем занять у левого двоюродного брата */
         if (is_left_brother_exist(parent_index - 1 - 1)) {
-            auto left_left_brother = (*parent)->_pointers[parent_index - 1 - 1];
+            auto left_left_brother = &(*parent)->_pointers[parent_index - 1 - 1];
             if (!is_node_has_more_minimum_keys(left_left_brother)) {
                 /* можно занять у левого двоюродного брата */
                 train_from_left_left_brother(node, left_brother, left_left_brother, parent, parent_index - 1);
@@ -1922,9 +1922,9 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
 
     /* case 1 */
     if (is_right_brother_exist(parent, parent_index)) {
-        auto right_brother = (*parent)->_pointers[parent_index]; // TODO: check indexes pls!!
+        auto right_brother = &(*parent)->_pointers[parent_index]; // TODO: check indexes pls!!
         if (is_right_brother_exist(right_brother, parent_index + 1)) {
-            auto right_right_brother = (*parent)->_pointers[parent_index + 1];
+            auto right_right_brother = &(*parent)->_pointers[parent_index + 1];
             merge(node, right_brother, right_right_brother, parent, parent_index + 1); // TODO: check indexes plsplspls!!!!
             rebalancing_after_erase(path);
             return;
@@ -1934,8 +1934,8 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
 
     /* case 2 */
     if (is_right_brother_exist(parent, parent_index) && is_left_brother_exist(parent_index - 1)) {
-        auto right_brother = (*parent)->_pointers[parent_index];
-        auto left_brother = (*parent)->_pointers[parent_index - 1];
+        auto right_brother = &(*parent)->_pointers[parent_index];
+        auto left_brother = &(*parent)->_pointers[parent_index - 1];
 
         merge(left_brother, node, right_brother, parent, parent_index);
         rebalancing_after_erase(path);
@@ -1944,9 +1944,9 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
 
     /* case 3 */
     if (is_left_brother_exist(parent_index - 1)) {
-        auto left_brother = (*parent)->_pointers[parent_index - 1];
+        auto left_brother = &(*parent)->_pointers[parent_index - 1];
         if (is_left_brother_exist(parent_index - 1 - 1)) {
-            auto left_left_brother = (*parent)->_pointers[parent_index - 1 - 1];
+            auto left_left_brother = &(*parent)->_pointers[parent_index - 1 - 1];
             merge(left_left_brother, left_brother, node, parent, parent_index - 1);
             rebalancing_after_erase(path);
             return;
