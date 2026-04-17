@@ -1879,17 +1879,17 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
     auto [parent, _] = path.top();
     /* пробуем занять у правого брата */
     if (is_right_brother_exist(parent, parent_index)) {
-        auto right_brother = &(*parent)->_pointers[parent_index]; // TODO: check it!
+        auto right_brother = &(*parent)->_pointers[parent_index + 1];
         if (is_node_has_more_minimum_keys(right_brother)) {
             /* можно занять у правого брата */
-            train_from_right_brother(node, right_brother, parent, parent_index); // TODO: check index!
+            train_from_right_brother(node, right_brother, parent, parent_index);
             return;
         }
 
 
         /* занять у правого брата не получилось, пробуем у правого двоюродного брата */
-        if (is_right_brother_exist(right_brother, parent_index + 1)) {
-            auto right_right_brother = &(*parent)->_pointers[parent_index + 1]; // TODO: check it!
+        if (is_right_brother_exist(parent, parent_index + 1)) {
+            auto right_right_brother = &(*parent)->_pointers[parent_index + 1 + 1];
             if (is_node_has_more_minimum_keys(right_right_brother)) {
                 /* можно занять у двоюродного брата */
                 train_from_right_right_brother(node, right_brother, right_right_brother, parent, parent_index);
@@ -1900,10 +1900,10 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
 
     /* занять справа не получилось, занимаем слева */
     if (is_left_brother_exist(parent_index)) {
-        auto left_brother = &(*parent)->_pointers[parent_index - 1]; // TODO: check it!
+        auto left_brother = &(*parent)->_pointers[parent_index - 1];
         if (is_node_has_more_minimum_keys(left_brother)) {
             /* можно занять у левого брата */
-            train_from_left_brother(node, left_brother, parent, parent_index - 1); // TODO: check it!
+            train_from_left_brother(node, left_brother, parent, parent_index); // TODO: check it!
             return;
         }
 
@@ -1912,7 +1912,7 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
             auto left_left_brother = &(*parent)->_pointers[parent_index - 1 - 1];
             if (is_node_has_more_minimum_keys(left_left_brother)) {
                 /* можно занять у левого двоюродного брата */
-                train_from_left_left_brother(node, left_brother, left_left_brother, parent, parent_index - 1);
+                train_from_left_left_brother(node, left_brother, left_left_brother, parent, parent_index);
                 return;
             }
         }
@@ -1929,9 +1929,9 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
 
     /* case 1 */
     if (is_right_brother_exist(parent, parent_index)) {
-        auto right_brother = &(*parent)->_pointers[parent_index]; // TODO: check indexes pls!!
-        if (is_right_brother_exist(right_brother, parent_index + 1)) {
-            auto right_right_brother = &(*parent)->_pointers[parent_index + 1];
+        auto right_brother = &(*parent)->_pointers[parent_index + 1];
+        if (is_right_brother_exist(parent, parent_index + 1)) {
+            auto right_right_brother = &(*parent)->_pointers[parent_index + 1 + 1];
             merge(node, right_brother, right_right_brother, parent, parent_index + 1); // TODO: check indexes plsplspls!!!!
             rebalancing_after_erase(path);
             return;
@@ -1941,7 +1941,7 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
 
     /* case 2 */
     if (is_right_brother_exist(parent, parent_index) && is_left_brother_exist(parent_index)) {
-        auto right_brother = &(*parent)->_pointers[parent_index];
+        auto right_brother = &(*parent)->_pointers[parent_index + 1];
         auto left_brother = &(*parent)->_pointers[parent_index - 1];
 
         merge(left_brother, node, right_brother, parent, parent_index);
@@ -2092,7 +2092,7 @@ bool BS_tree<tkey, tvalue, compare, t>::is_right_brother_exist(bstree_node** par
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 bool BS_tree<tkey, tvalue, compare, t>::is_left_brother_exist(size_t index) {
-    return index - 1 < 0;
+    return index - 1 >= 0;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -2117,7 +2117,7 @@ bool BS_tree<tkey, tvalue, compare, t>::is_node_miss_elements(bstree_node** node
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::train_from_right_brother(bstree_node** node, bstree_node** right_brother,
                                                             bstree_node** parent, size_t parent_index) {
-    push_front_element_to_parent(right_brother, parent, parent_index);
+    push_front_element_to_parent(right_brother, parent, parent_index + 1); // TODO: check pls!
     pull_element_to_back_from_parent(node, parent, parent_index);
 }
 
@@ -2133,7 +2133,7 @@ void BS_tree<tkey, tvalue, compare, t>::train_from_right_brother(bstree_node** n
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::train_from_left_brother(bstree_node** node, bstree_node** left_brother,
                                                             bstree_node** parent, size_t parent_index) {
-    push_back_element_to_parent(left_brother, parent, parent_index);
+    push_back_element_to_parent(left_brother, parent, parent_index - 1); // TODO: check pls!
     pull_element_to_front_from_parent(node, parent, parent_index);
 }
 
@@ -2348,7 +2348,7 @@ BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::erase(bstree_const_iterator pos)
 {
-    throw not_implemented("template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::erase(bstree_const_iterator pos)", "your code should be here...");
+    return erase(bstree_iterator(pos));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -2366,9 +2366,10 @@ BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::erase(const tkey& key)
 {
-    throw not_implemented(
-            "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BS_tree<tkey, tvalue, compare, t>::bstree_iterator BS_tree<tkey, tvalue, compare, t>::erase(const tkey& key)",
-            "your code should be here...");
+    auto iterator = find(key);
+    if (iterator == end()) return iterator;
+
+    return erase(iterator);
 }
 
 // endregion modifiers impl
