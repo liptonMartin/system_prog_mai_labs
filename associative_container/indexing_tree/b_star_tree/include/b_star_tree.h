@@ -1820,14 +1820,14 @@ void BS_tree<tkey, tvalue, compare, t>::erase_from_internal_node(std::stack<std:
 
     /* пытаемся найти самый левый элемент в правом поддереве */
     if (index < (*node)->_keys.size()) {
-        auto most_left_element_right_subtree = (*node)->_pointers[index + 1];
-        path.emplace(&most_left_element_right_subtree, index + 1);
-        while (!most_left_element_right_subtree->_pointers.empty()) {
-            most_left_element_right_subtree = most_left_element_right_subtree->_pointers[0];
-            path.emplace(&most_left_element_right_subtree, 0);
+        auto most_left_element_right_subtree = &(*node)->_pointers[index + 1];
+        path.emplace(most_left_element_right_subtree, index + 1);
+        while (!(*most_left_element_right_subtree)->_pointers.empty()) {
+            most_left_element_right_subtree = &(*most_left_element_right_subtree)->_pointers[0];
+            path.emplace(most_left_element_right_subtree, 0);
         }
 
-        (*node)->_keys[index] = most_left_element_right_subtree->_keys[0]; /* замена */
+        (*node)->_keys[index] = (*most_left_element_right_subtree)->_keys[0]; /* замена */
 
         erase_from_leaf(path, 0);
         return;
@@ -1835,17 +1835,17 @@ void BS_tree<tkey, tvalue, compare, t>::erase_from_internal_node(std::stack<std:
 
     /* пытаемся найти самый правый элемент в левом поддереве */
     if (index != 0) {
-        auto most_right_element_left_subtree = (*node)->_pointers[index - 1];
-        path.emplace(&most_right_element_left_subtree, index - 1);
-        while (!most_right_element_left_subtree->_pointers.empty()) {
-            auto index_last_child = most_right_element_left_subtree->_pointers.size() - 1;
+        auto most_right_element_left_subtree = &(*node)->_pointers[index];
+        path.emplace(most_right_element_left_subtree, index);
+        while (!(*most_right_element_left_subtree)->_pointers.empty()) {
+            auto index_last_child = (*most_right_element_left_subtree)->_pointers.size() - 1;
 
-            most_right_element_left_subtree = most_right_element_left_subtree->_pointers[index_last_child];
-            path.emplace(&most_right_element_left_subtree, index_last_child);
+            most_right_element_left_subtree = &(*most_right_element_left_subtree)->_pointers[index_last_child];
+            path.emplace(most_right_element_left_subtree, index_last_child);
         }
 
-        auto index_last_element = most_right_element_left_subtree->_keys.size() - 1;
-        (*node)->_keys[index] = most_right_element_left_subtree->_keys[index_last_element]; /* замена */
+        auto index_last_element = (*most_right_element_left_subtree)->_keys.size() - 1;
+        (*node)->_keys[index] = (*most_right_element_left_subtree)->_keys[index_last_element]; /* замена */
 
         erase_from_leaf(path, index_last_element);
         return;
