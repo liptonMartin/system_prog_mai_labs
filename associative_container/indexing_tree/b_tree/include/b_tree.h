@@ -45,6 +45,17 @@ private:
 
     pp_allocator<value_type> get_allocator() const noexcept;
 
+    template<typename T, typename Allocator>
+    struct allocator_deleter {
+        Allocator* allocator;
+
+        allocator_deleter(Allocator* alloc) : allocator(alloc) {}
+
+        void operator()(T* ptr) const {
+            if (ptr) allocator->template delete_object<T>(ptr);
+        }
+    };
+
 public:
 
     // region constructors declaration
@@ -579,21 +590,25 @@ B_tree<tkey, tvalue, compare, t>::btree_node*
 B_tree<tkey, tvalue, compare, t>::clone_node(btree_node* node) {
     if (!node) return nullptr;
 
-    auto* new_node = new btree_node();
-    new_node->_keys = node->_keys;
-    new_node->_pointers.resize(node->_pointers.size());
+    using unique_node = std::unique_ptr<btree_node, allocator_deleter<btree_node, decltype(_allocator)>>;
+
+
+    auto* new_raw_node = _allocator.template new_object<btree_node>();
+    unique_node new_unique_node(new_raw_node, allocator_deleter<btree_node, decltype(_allocator)>(&_allocator));
+
+    new_unique_node->_keys = node->_keys;
+    new_unique_node->_pointers.resize(node->_pointers.size());
+
     for (size_t i = 0; i < node->_pointers.size(); ++i) {
-        new_node->_pointers[i] = clone_node(node->_pointers[i]);
+        new_unique_node->_pointers[i] = clone_node(node->_pointers[i]);
     }
 
-    return new_node;
+    return new_unique_node.release();
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void B_tree<tkey, tvalue, compare, t>::delete_node(btree_node *node) noexcept {
     if (!node) return;
-
-    auto node_vector = new debug_btree_node(node);
 
     for (auto child : node->_pointers) {
         delete_node(child);
@@ -621,7 +636,9 @@ B_tree<tkey, tvalue, compare, t>& B_tree<tkey, tvalue, compare, t>::operator=(co
 {
     if (this != &other) {
         static_cast<compare&>(*this) = static_cast<compare&>(other);
-        _root = clone_node(other._root);
+        auto new_root = clone_node(other._root);
+        delete_node(_root);
+        _root = new_root;
         _allocator = other._allocator;
         _size = other._size;
     }
