@@ -1767,15 +1767,15 @@ void BS_tree<tkey, tvalue, compare, t>::split(bstree_node**left, bstree_node**ri
         middle_node->_keys.push_back(element);
 
         if (!((*left)->_pointers.empty())) {
-            auto child = (*left)->_pointers[i];
-            middle_node->_pointers.push_back(child);
-            (*left)->_pointers.erase((*left)->_pointers.begin() + i);
+            auto child = (*left)->_pointers.back();
+            middle_node->_pointers.insert( middle_node->_pointers.begin(), child);
+            (*left)->_pointers.pop_back();
         }
     }
     /* добавляем последнего ребенка узла в средний узел, если он есть */
     if (!((*left)->_pointers.empty())) {
         auto child = (*left)->_pointers.back();
-        middle_node->_pointers.push_back(child);
+        middle_node->_pointers.insert( middle_node->_pointers.begin(), child);
         (*left)->_pointers.pop_back();
     }
 
@@ -1796,9 +1796,9 @@ void BS_tree<tkey, tvalue, compare, t>::split(bstree_node**left, bstree_node**ri
         middle_node->_keys.push_back(element);
 
         if (!((*right)->_pointers.empty())) {
-            auto child = (*right)->_pointers[i];
+            auto child = (*right)->_pointers.front();
             middle_node->_pointers.push_back(child);
-            (*right)->_pointers.erase((*right)->_pointers.begin() + i);
+            (*right)->_pointers.erase((*right)->_pointers.begin());
         }
     }
 
