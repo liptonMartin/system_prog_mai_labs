@@ -9,7 +9,7 @@ int main() {
 
     srand(10);
     int min = 1;
-    int max = 500;
+    int max = 5000;
     std::set<int> added_numbers;
     std::vector<int> vector_added_numbers;
 
@@ -39,7 +39,7 @@ int main() {
     std::cout << '\n';
     std::cout << "Tree size: " << tree.size() << '\n';
 
-
+    
     tree.print_tree();
 
 
