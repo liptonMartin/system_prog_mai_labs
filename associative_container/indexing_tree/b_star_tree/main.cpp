@@ -10,10 +10,9 @@ int main() {
     srand(10);
     int min = 1;
     int max = 500;
-
     std::set<int> added_numbers;
 
-    for (int i = 0; i < 200; ++i) {
+    for (int i = 0; i < 50; ++i) {
         auto number = min + rand() % (max - min + 1);
         std::cout << "Add a number: " << ' ' << number << '\n';
         added_numbers.insert(number);
@@ -23,7 +22,22 @@ int main() {
     for (auto item : added_numbers) std::cout << item << ' ';
     std::cout << '\n';
     std::cout << "Tree size: " << tree.size() << '\n';
+
     tree.print_tree();
+
+    std::cout << "Process deleting keys...\n";
+    int count = 0;
+    for (auto item : added_numbers) {
+        std::cout << count << ". " << item << '\n';
+        tree.erase(item);
+        ++count;
+    }
+
+    std::cout << "Count remaining from set: " << added_numbers.size() - count << '\n';
+    std::cout << "Count remaining from tree: " << tree.size() << '\n' ;
+
+
+
 
     return 0;
 }

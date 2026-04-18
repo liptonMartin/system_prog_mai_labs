@@ -94,11 +94,7 @@ public:
 
             // Копируем указатели (рекурсивно конвертируем детей)
             for (auto* child : node->_pointers) {
-                if (child) {
-                    _pointers.push_back(new debug_bstree_node(child));
-                } else {
-                    _pointers.push_back(nullptr);
-                }
+                _pointers.push_back(new debug_bstree_node(child));
             }
         }
 
@@ -470,8 +466,14 @@ private:
     void push_back_element_to_parent(bstree_node** node, bstree_node** parent, size_t parent_index);
     void pull_element_to_front_from_parent(bstree_node** node, bstree_node** parent, size_t parent_index);
 
-    void push_back_child_to_parent(bstree_node** node, bstree_node** parent, size_t parent_index);
-    void push_front_child_to_parent(bstree_node** node, bstree_node** parent, size_t parent_index);
+    void move_child_from_right_brother(bstree_node** node, bstree_node** right_brother);
+    void move_child_from_left_brother(bstree_node** node, bstree_node** left_brother);
+
+    void move_child_from_right_right_brother(bstree_node** node, bstree_node** right_brother, bstree_node** right_right_brother);
+    void move_child_from_left_left_brother(bstree_node** node, bstree_node** left_brother, bstree_node** left_left_brother);
+
+    void push_back_child_to_parent(bstree_node* node, bstree_node** parent, size_t parent_index);
+    void push_front_child_to_parent(bstree_node* node, bstree_node** parent, size_t parent_index);
 
     // endregion
 
@@ -521,9 +523,6 @@ void BS_tree<tkey, tvalue, compare, t>::print_tree() {
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::print_node(bstree_node* node, int depth) {
-    std::vector<tree_data_type> keys(node->_keys.begin(), node->_keys.end());
-    std::vector<bstree_node*> pointers(node->_pointers.begin(), node->_pointers.end());
-
     std::cout << std::string(depth, ' ');
 
     std::cout << '[';
@@ -1883,6 +1882,10 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
         if (is_node_has_more_minimum_keys(right_brother)) {
             /* можно занять у правого брата */
             train_from_right_brother(node, right_brother, parent, parent_index);
+            if (!(*node)->_pointers.empty()) {
+                /* если есть дети у узла, то они должны быть и у правого брата */
+                move_child_from_right_brother(node, right_brother);
+            }
             return;
         }
 
@@ -1893,6 +1896,10 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
             if (is_node_has_more_minimum_keys(right_right_brother)) {
                 /* можно занять у двоюродного брата */
                 train_from_right_right_brother(node, right_brother, right_right_brother, parent, parent_index);
+                if (!(*node)->_pointers.empty()) {
+                    /* если есть дети у узла, то они должны быть и у правого брата */
+                    move_child_from_right_right_brother(node, right_brother, right_right_brother);
+                }
                 return;
             }
         }
@@ -1903,7 +1910,11 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
         auto left_brother = &(*parent)->_pointers[parent_index - 1];
         if (is_node_has_more_minimum_keys(left_brother)) {
             /* можно занять у левого брата */
-            train_from_left_brother(node, left_brother, parent, parent_index); // TODO: check it!
+            train_from_left_brother(node, left_brother, parent, parent_index);
+            if (!(*node)->_pointers.empty()) {
+                /* если есть дети у узла, то они должны быть и у левого брата */
+                move_child_from_left_brother(node, left_brother);
+            }
             return;
         }
 
@@ -1913,6 +1924,10 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
             if (is_node_has_more_minimum_keys(left_left_brother)) {
                 /* можно занять у левого двоюродного брата */
                 train_from_left_left_brother(node, left_brother, left_left_brother, parent, parent_index);
+                if (!(*node)->_pointers.empty()) {
+                    /* если есть дети у узла, то они должны быть и у левого брата */
+                    move_child_from_left_left_brother(node, left_brother, left_left_brother);
+                }
                 return;
             }
         }
@@ -2042,10 +2057,10 @@ void BS_tree<tkey, tvalue, compare, t>::merge(bstree_node** left, bstree_node** 
         (*node)->_pointers.pop_back();
     }
 
+    delete_node(*node);
+
     (*parent)->_keys.insert((*parent)->_keys.begin() + parent_index - 1, split_element); /* добавляем в родителя */
     (*parent)->_pointers.erase((*parent)->_pointers.begin() + parent_index); /* удаляем ребенка, который указывал на node */
-
-    delete_node(*node);
 }
 
 
@@ -2056,32 +2071,32 @@ void BS_tree<tkey, tvalue, compare, t>::merge(bstree_node** left, bstree_node** 
  */
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::merge_with_root() {
-    auto** left = &_root->_pointers.front();
-    auto** right = &_root->_pointers.back();
+    auto* left = _root->_pointers.front();
+    auto* right = _root->_pointers.back();
 
     _root->_pointers.erase(_root->_pointers.begin(), _root->_pointers.end());
 
-    while (!(*left)->_keys.empty()) {
-        push_back_element_to_parent(left, &_root, 0);
+    while (!left->_keys.empty()) {
+        push_back_element_to_parent(&left, &_root, 0);
 
-        if (!(*left)->_pointers.empty()) {
+        if (!left->_pointers.empty()) {
             push_back_child_to_parent(left, &_root, 0);
         }
     }
-    if (!(*left)->_pointers.empty()) {
+    if (!left->_pointers.empty()) {
         push_back_child_to_parent(left, &_root, 0);
     }
 
-    while (!(*right)->_keys.empty()) {
-        push_front_element_to_parent(right, &_root, _root->_keys.size()); /* вставляем в последний элемент  */
+    while (!right->_keys.empty()) {
+        push_front_element_to_parent(&right, &_root, _root->_keys.size()); /* вставляем в последний элемент  */
 
-        if (!(*right)->_pointers.empty()) {
-            push_front_child_to_parent(right, &_root, _root->_keys.size()); /* вставляем в последний элемент */
+        if (!right->_pointers.empty()) {
+            push_front_child_to_parent(right, &_root, _root->_pointers.size()); /* вставляем в последний элемент */
         }
     }
 
-    if (!(*right)->_pointers.empty()) {
-        push_front_child_to_parent(right, &_root, _root->_keys.size()); /* вставляем в последний элемент */
+    if (!right->_pointers.empty()) {
+        push_front_child_to_parent(right, &_root, _root->_pointers.size()); /* вставляем в последний элемент */
     }
 }
 
@@ -2092,6 +2107,7 @@ bool BS_tree<tkey, tvalue, compare, t>::is_right_brother_exist(bstree_node** par
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 bool BS_tree<tkey, tvalue, compare, t>::is_left_brother_exist(size_t index) {
+    if (index == 0) return false;
     return index - 1 >= 0;
 }
 
@@ -2117,7 +2133,7 @@ bool BS_tree<tkey, tvalue, compare, t>::is_node_miss_elements(bstree_node** node
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::train_from_right_brother(bstree_node** node, bstree_node** right_brother,
                                                             bstree_node** parent, size_t parent_index) {
-    push_front_element_to_parent(right_brother, parent, parent_index + 1); // TODO: check pls!
+    push_front_element_to_parent(right_brother, parent, parent_index + 1);
     pull_element_to_back_from_parent(node, parent, parent_index);
 }
 
@@ -2133,7 +2149,7 @@ void BS_tree<tkey, tvalue, compare, t>::train_from_right_brother(bstree_node** n
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BS_tree<tkey, tvalue, compare, t>::train_from_left_brother(bstree_node** node, bstree_node** left_brother,
                                                             bstree_node** parent, size_t parent_index) {
-    push_back_element_to_parent(left_brother, parent, parent_index - 1); // TODO: check pls!
+    push_back_element_to_parent(left_brother, parent, parent_index - 1);
     pull_element_to_front_from_parent(node, parent, parent_index);
 }
 
@@ -2236,9 +2252,9 @@ void BS_tree<tkey, tvalue, compare, t>::pull_element_to_front_from_parent(bstree
  * @param parent_index Индекс в родителе
  */
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-void BS_tree<tkey, tvalue, compare, t>::push_back_child_to_parent(bstree_node **node, bstree_node **parent, size_t parent_index) {
-    auto child = (*node)->_pointers.back();
-    (*node)->_pointers.pop_back();
+void BS_tree<tkey, tvalue, compare, t>::push_back_child_to_parent(bstree_node *node, bstree_node **parent, size_t parent_index) {
+    auto* child = node->_pointers.back();
+    node->_pointers.pop_back();
     (*parent)->_pointers.insert((*parent)->_pointers.begin() + parent_index, child);
 }
 
@@ -2250,11 +2266,63 @@ void BS_tree<tkey, tvalue, compare, t>::push_back_child_to_parent(bstree_node **
  * @param parent_index Индекс в родителе
  */
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-void BS_tree<tkey, tvalue, compare, t>::push_front_child_to_parent(bstree_node **node, bstree_node **parent, size_t parent_index) {
-    auto child  = (*node)->_pointers.front();
-    (*node)->_pointers.erase((*node)->_pointers.begin());
+void BS_tree<tkey, tvalue, compare, t>::push_front_child_to_parent(bstree_node *node, bstree_node **parent, size_t parent_index) {
+    auto child  = node->_pointers.front();
+    node->_pointers.erase(node->_pointers.begin());
     (*parent)->_pointers.insert((*parent)->_pointers.begin() + parent_index, child);
 }
+
+
+/**
+ * Забирает первого ребенка у правого брата
+ * @param node Узел, в который надо перенести ребенка
+ * @param right_brother Правый брат узла, у которого надо забрать ребенка
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BS_tree<tkey, tvalue, compare, t>::move_child_from_right_brother(bstree_node **node, bstree_node **right_brother) {
+    auto child = (*right_brother)->_pointers.front();
+    (*right_brother)->_pointers.erase((*right_brother)->_pointers.begin());
+    (*node)->_pointers.push_back(child);
+}
+
+/**
+ * Забирает последнего ребенка у левого брата
+ * @param node Узел, в который надо перенести ребенка
+ * @param left_brother Левый брат узла, у которого надо забрать ребенка
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BS_tree<tkey, tvalue, compare, t>::move_child_from_left_brother(bstree_node **node, bstree_node **left_brother) {
+    auto child = (*left_brother)->_pointers.back();
+    (*left_brother)->_pointers.pop_back();
+    (*node)->_pointers.insert((*node)->_pointers.begin(), child);
+}
+
+
+/**
+ * Переносит сначала ребенка у двоюродного брата в брата, а затем из брата в узел
+ * @param node Узел
+ * @param right_brother Правый брат
+ * @param right_right_brother Двоюродный правый брат
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BS_tree<tkey, tvalue, compare, t>::move_child_from_right_right_brother(bstree_node **node, bstree_node **right_brother, bstree_node **right_right_brother) {
+    move_child_from_right_brother(right_brother, right_right_brother);
+    move_child_from_right_brother(node, right_brother);
+}
+
+/**
+ * Переносит сначала ребенка у двоюродного брата в брата, а затем из брата в узел
+ * @param node Узел
+ * @param left_brother Левый брат
+ * @param left_left_brother Двоюродный левый брат
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BS_tree<tkey, tvalue, compare, t>::move_child_from_left_left_brother(bstree_node **node, bstree_node **left_brother, bstree_node **left_left_brother) {
+    move_child_from_left_brother(left_brother, left_left_brother);
+    move_child_from_left_brother(node, left_brother);
+}
+
+
 
 
 // endregion
