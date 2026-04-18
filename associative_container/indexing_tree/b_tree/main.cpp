@@ -59,5 +59,10 @@ int main() {
     // auto iter = tree.lower_bound(1);
     // auto iter_2 = tree.upper_bound(2);
 
+    B_tree<int, std::string, std::less<int>, 5> tree_2 = tree;
+    tree.print_tree();
+    std::cout << "\n\n";
+    tree_2.print_tree();
+
     return 0;
 }
