@@ -1947,7 +1947,7 @@ void BS_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(std::stack<std::
         auto right_brother = &(*parent)->_pointers[parent_index + 1];
         if (is_right_brother_exist(parent, parent_index + 1)) {
             auto right_right_brother = &(*parent)->_pointers[parent_index + 1 + 1];
-            merge(node, right_brother, right_right_brother, parent, parent_index + 1); // TODO: check indexes plsplspls!!!!
+            merge(node, right_brother, right_right_brother, parent, parent_index + 1);
             rebalancing_after_erase(path);
             return;
         }
