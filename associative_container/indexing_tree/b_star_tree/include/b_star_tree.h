@@ -571,9 +571,12 @@ void BS_tree<tkey, tvalue, compare, t>::increment_iterator_inner(
 
     auto [node, parent_index] = path.top();
     /* пробуем опуститься в самого левого ребенка */
-    while ( !(*node)->_pointers.empty() ) {
-        node = &((*node)->_pointers[index + 1]);
-        path.emplace(node, index + 1);
+    if ( !(*node)->_pointers.empty()) {
+        while ( !(*node)->_pointers.empty() ) {
+            node = &((*node)->_pointers[index + 1]);
+            path.emplace(node, index + 1);
+            index = -1;
+        }
         index = 0;
         return;
     }
