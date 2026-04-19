@@ -30,12 +30,21 @@ private:
 
     inline bool compare_pairs(const tree_data_type &lhs, const tree_data_type &rhs) const;
 
+    bool less(tkey a, tkey b) { return compare::operator()(a, b); }
+    bool greater(tkey a, tkey b) { return compare::operator()(b, a); }
+    bool equal(tkey a, tkey b) { return !less(a, b) && !greater(a, b); }
+    bool not_equal(tkey a, tkey b) { return !equal(a, b); }
+    bool less_or_equal(tkey a, tkey b) { return less(a, b) || equal(a, b); }
+    bool greater_or_equal(tkey a, tkey b) { return greater(a, b) || equal(a, b); }
+
     // endregion comparators declaration
 
     struct bptree_node_base {
         bool _is_terminate;
 
         bptree_node_base() noexcept;
+
+        virtual boost::container::static_vector<tkey, maximum_keys_in_node + 1> &keys() = 0;
 
         virtual ~bptree_node_base() = default;
     };
@@ -46,6 +55,8 @@ private:
         boost::container::static_vector<tree_data_type, maximum_keys_in_node + 1> _data;
 
         bptree_node_term() noexcept;
+
+        boost::container::static_vector<tkey, maximum_keys_in_node + 1> &keys() override;
     };
 
     struct bptree_node_middle : public bptree_node_base {
@@ -53,6 +64,8 @@ private:
         boost::container::static_vector<bptree_node_base *, maximum_keys_in_node + 2> _pointers;
 
         bptree_node_middle() noexcept;
+
+        boost::container::static_vector<tkey, maximum_keys_in_node + 1> &keys() override;
     };
 
     pp_allocator<value_type> _allocator;
@@ -326,6 +339,29 @@ BP_tree<tkey, tvalue, compare, t>::bptree_node_middle::bptree_node_middle() noex
 }
 
 // endregion node constructors impl
+
+// region node virtual functions impl
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+boost::container::static_vector<tkey, BP_tree<tkey, tvalue, compare, t>::maximum_keys_in_node + 1> &BP_tree<tkey, tvalue
+    , compare,
+    t>::bptree_node_term::keys() {
+    auto keys = boost::container::static_vector<tkey, maximum_keys_in_node + 1>{};
+    for (auto &elem: _data) {
+        keys.push_back(elem.first);
+    }
+    return keys;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+boost::container::static_vector<tkey, BP_tree<tkey, tvalue, compare, t>::maximum_keys_in_node + 1> &BP_tree<tkey, tvalue
+    , compare,
+    t>::bptree_node_middle::keys() {
+    return _keys;
+}
+
+
+// endregion
 
 // region getters
 
@@ -638,70 +674,122 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, 
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 size_t BP_tree<tkey, tvalue, compare, t>::size() const noexcept {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> size_t BP_tree<tkey, tvalue, compare, t>::size() const noexcept",
-        "your code should be here...");
+    return _size;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 bool BP_tree<tkey, tvalue, compare, t>::empty() const noexcept {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> bool BP_tree<tkey, tvalue, compare, t>::empty() const noexcept",
-        "your code should be here...");
+    return _size == 0;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::find(const tkey &key) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::find(const tkey& key)",
-        "your code should be here...");
+    if (_root == nullptr) return end();
+
+    auto *node = _root;
+    do {
+        auto keys = node->keys();
+        /* бинарный поиск по ключам */
+        size_t l = 0;
+        size_t r = keys.size();
+        while (l + 1 < r) {
+            size_t m = (l + r) / 2;
+
+            if (less_or_equal(keys[m], key)) {
+                /* keys[m] <= key */
+                l = m;
+            } else {
+                r = m;
+            }
+        }
+
+        /* такой ключ существует в листе */
+        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(node, l);
+
+        /* нужно перейти в самого левого ребенка */
+        if (less(key, keys[l])) --l;
+
+        auto middle_node = dynamic_cast<bptree_node_middle *>(node);
+        if (middle_node != nullptr) node = middle_node->_pointers[l + 1];
+    } while (!node->_is_terminate);
+
+    return end();
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::find(
     const tkey &key) const {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::find(const tkey& key) const",
-        "your code should be here...");
+    return bptree_const_iterator(const_cast<BP_tree *>(this)->find(key));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare,
     t>::lower_bound(const tkey &key) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::lower_bound(const tkey& key)",
-        "your code should be here...");
+    if (_root == nullptr) return end();
+
+    auto *node = _root;
+    size_t index = 0;
+    do {
+        auto keys = node->keys();
+        /* бинарный поиск по ключам */
+        size_t l = 0;
+        size_t r = keys.size();
+        while (l + 1 < r) {
+            size_t m = (l + r) / 2;
+
+            if (less_or_equal(keys[m], key)) {
+                /* keys[m] <= key */
+                l = m;
+            } else {
+                r = m;
+            }
+        }
+
+        /* такой ключ существует в листе */
+        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(node, l);
+
+        /* нужно перейти в самого левого ребенка */
+        if (less(key, keys[l])) --l;
+
+        auto middle_node = dynamic_cast<bptree_node_middle *>(node);
+        if (middle_node != nullptr) {
+            ++l;
+            node = middle_node->_pointers[l];
+        }
+        index = l;
+    } while (!node->_is_terminate);
+
+    auto iterator = bptree_iterator(node, index);
+    /* в случае (index == 0 && key < (*iterator).first) мы уже находимся на элементе, который больше нашего */
+    if (iterator->first == key || (index == 0 && key < iterator->first)) return iterator;
+    return ++iterator; /* следующий элемент */
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::lower_bound(
     const tkey &key) const {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::lower_bound(const tkey& key) const",
-        "your code should be here...");
+    return bstree_const_iterator(const_cast<BP_tree *>(this)->lower_bound(key));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare,
     t>::upper_bound(const tkey &key) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::upper_bound(const tkey& key)",
-        "your code should be here...");
+    auto iterator = lower_bound(key);
+
+    if (iterator == end()) return iterator;
+    if (iterator->first == key) return ++iterator;
+    return iterator;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::upper_bound(
     const tkey &key) const {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::upper_bound(const tkey& key) const",
-        "your code should be here...");
+    return bstree_const_iterator(const_cast<BP_tree*>(this)->upper_bound(key));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 bool BP_tree<tkey, tvalue, compare, t>::contains(const tkey &key) const {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> bool BP_tree<tkey, tvalue, compare, t>::contains(const tkey& key) const",
-        "your code should be here...");
+    return find(key) != end();
 }
 
 // endregion lookup impl
