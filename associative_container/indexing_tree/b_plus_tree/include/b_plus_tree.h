@@ -297,7 +297,8 @@ public:
     // region debug functions
 
     void print_tree();
-    void print_node(bptree_node_base* node, int depth = 0);
+
+    void print_node(bptree_node_base *node, int depth = 0);
 
     // endregion
 
@@ -363,7 +364,7 @@ void BP_tree<tkey, tvalue, compare, t>::print_tree() {
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-void BP_tree<tkey, tvalue, compare, t>::print_node(bptree_node_base* node, int depth) {
+void BP_tree<tkey, tvalue, compare, t>::print_node(bptree_node_base *node, int depth) {
     std::cout << std::string(depth, ' ');
 
     auto keys = node->keys();
@@ -374,7 +375,7 @@ void BP_tree<tkey, tvalue, compare, t>::print_node(bptree_node_base* node, int d
     }
     std::cout << "]\n" << std::flush;
 
-    if (auto node_middle = dynamic_cast<bptree_node_middle*>(node)) {
+    if (auto node_middle = dynamic_cast<bptree_node_middle *>(node)) {
         std::cout << "(" << keys[0] << ')';
         print_node(node_middle->_pointers[0], depth + 1);
 
@@ -385,7 +386,6 @@ void BP_tree<tkey, tvalue, compare, t>::print_node(bptree_node_base* node, int d
             }
         }
     }
-
 }
 
 // endregion debug impl
@@ -1012,7 +1012,8 @@ void BP_tree<tkey, tvalue, compare, t>::split(bptree_node_base *node,
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-void BP_tree<tkey, tvalue, compare, t>::handle_fill_term_node(bptree_node_term *node, bptree_node_term *second_child, size_t middle) {
+void BP_tree<tkey, tvalue, compare, t>::handle_fill_term_node(bptree_node_term *node, bptree_node_term *second_child,
+                                                              size_t middle) {
     /* добавляем ключи в новый узел */
     second_child->_data.insert(second_child->_data.end(), node->_data.begin() + middle,
                                node->_data.end());
@@ -1027,7 +1028,8 @@ template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t
 void BP_tree<tkey, tvalue, compare, t>::handle_fill_middle_node(bptree_node_middle *node,
                                                                 bptree_node_middle *second_child, size_t middle) {
     /* добавляем ключи в новый узел */
-    second_child->_keys.insert(second_child->_keys.end(), node->_keys.begin() + middle,
+    second_child->_keys.insert(second_child->_keys.end(), node->_keys.begin() + middle + 1,
+                               /* если это внутренний узел, то повторно добавлять узел не нужно */
                                node->_keys.end());
     node->_keys.erase(node->_keys.begin() + middle, node->_keys.end());
 
