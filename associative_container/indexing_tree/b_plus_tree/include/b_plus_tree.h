@@ -751,7 +751,7 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
     if (_root == nullptr) return end();
 
     auto *node = _root;
-    do {
+    while (node) {
         auto keys = node->keys();
         /* бинарный поиск по ключам */
         size_t l = 0;
@@ -777,7 +777,8 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
         if (middle_node != nullptr) node = middle_node->_pointers[l + 1];
-    } while (!node->_is_terminate);
+        else node = nullptr;
+    }
 
     return end();
 }
@@ -795,7 +796,7 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 
     auto *node = _root;
     size_t index = 0;
-    do {
+    while (node != nullptr) {
         auto keys = node->keys();
         /* бинарный поиск по ключам */
         size_t l = 0;
@@ -821,9 +822,9 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
         if (middle_node != nullptr) {
             ++l;
             node = middle_node->_pointers[l];
-        }
+        } else node = nullptr;
         index = l;
-    } while (!node->_is_terminate);
+    }
 
     auto iterator = bptree_iterator(node, index);
     /* в случае (index == 0 && key < (*iterator).first) мы уже находимся на элементе, который больше нашего */
@@ -911,8 +912,9 @@ BP_tree<tkey, tvalue, compare, t>::path_position BP_tree<tkey, tvalue, compare, 
     size_t index = 0;
     std::stack<std::pair<bptree_node_base *, size_t> > path{};
     path.emplace(_root, 0);
+    tkey less_or_equal_key = node->keys()[index]; /* будем хранить последний ключ, который мы посетили */
 
-    do {
+    while (node) {
         auto keys = node->keys();
         /* бинарный поиск по ключам */
         size_t l = 0;
@@ -929,17 +931,18 @@ BP_tree<tkey, tvalue, compare, t>::path_position BP_tree<tkey, tvalue, compare, 
         }
 
         /* нужно перейти в самого левого ребенка или дошли до конца, значит l увеличивать не нужно */
+        less_or_equal_key = keys[l];
+
         if (!(node->_is_terminate || less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
         if (middle_node != nullptr) {
             node = middle_node->_pointers[l];
             path.emplace(middle_node->_pointers[l], l);
-        }
+        } else node = nullptr;
         index = l;
-    } while (!node->_is_terminate);
+    }
 
-    auto less_or_equal_key = node->keys()[index]; /* ключ, который меньше или равен нашему */
     /* в случае (index == 0 && key < less_or_equal_key) мы уже находимся на элементе, который больше нашего */
     if (less_or_equal_key == key || (index == 0 && less(key, less_or_equal_key))) return path_position(path, index);
     /* в случае, если мы находимся на последнем элементе, то как раз ++index будет указывать на последний (еще несуществующий) элемент*/
@@ -988,7 +991,7 @@ void BP_tree<tkey, tvalue, compare, t>::split(bptree_node_base *node,
     }
 
     if (auto second_child_middle = dynamic_cast<bptree_node_middle *>(second_child), node_middle = dynamic_cast<
-                    bptree_node_middle *>(second_child_middle); second_child_middle && node_middle) {
+                    bptree_node_middle *>(node); second_child_middle && node_middle) {
         /* если это внутренний узел */
         data = node_middle->_keys[middle];
         handle_fill_middle_node(node_middle, second_child_middle, middle);
