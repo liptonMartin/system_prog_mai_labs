@@ -282,21 +282,22 @@ bool BP_tree<tkey, tvalue, compare, t>::compare_keys(const tkey &lhs, const tkey
 // region node constructors impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-BP_tree<tkey, tvalue, compare, t>::bptree_node_base::bptree_node_base() noexcept
-{
-    throw not_implemented("too laazyy", "your code should be here...");
-}
+BP_tree<tkey, tvalue, compare, t>::bptree_node_base::bptree_node_base() noexcept : _is_terminate(false) {}
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BP_tree<tkey, tvalue, compare, t>::bptree_node_term::bptree_node_term() noexcept
 {
-    throw not_implemented("too laazyy", "your code should be here...");
+    this->_is_terminate = true;
+    _next = nullptr;
+    _data = boost::container::static_vector<tree_data_type, maximum_keys_in_node + 1>{};
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BP_tree<tkey, tvalue, compare, t>::bptree_node_middle::bptree_node_middle() noexcept
 {
-    throw not_implemented("too laazyy", "your code should be here...");
+    this->_is_terminate = false;
+    _keys = boost::container::static_vector<tkey, maximum_keys_in_node + 1>{};
+    _pointers = boost::container::static_vector<bptree_node_base*, maximum_keys_in_node + 2>{};
 }
 
 // endregion node constructors impl
@@ -307,7 +308,7 @@ template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t
 pp_allocator<typename BP_tree<tkey, tvalue, compare, t>::value_type> BP_tree<tkey, tvalue, compare, t>::
 get_allocator() const noexcept
 {
-    throw not_implemented("too laazyy", "your code should be here...");
+    return _allocator;
 }
 
 // endregion
