@@ -442,7 +442,7 @@ get_allocator() const noexcept {
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator::reference BP_tree<tkey, tvalue, compare, t>::
 bptree_iterator::operator*() const noexcept {
-    return _node->_data[_index];
+    return reinterpret_cast<reference>(_node->_data[_index]);
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -691,11 +691,10 @@ BP_tree<tkey, tvalue, compare, t>::~BP_tree() noexcept {
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BP_tree<tkey, tvalue, compare, t>::bptree_node_term *BP_tree<tkey, tvalue, compare, t>::first_terminate_node() {
     bptree_node_base *node = _root;
-    while (dynamic_cast<bptree_node_middle *>(node)) {
-        node = dynamic_cast<bptree_node_middle *>(node);
-        node = node->_pointers[0];
+    while (auto node_middle = dynamic_cast<bptree_node_middle *>(node)) {
+        node = node_middle->_pointers[0];
     }
-    return node;
+    return dynamic_cast<bptree_node_term *>(node);
 }
 
 // endregion
