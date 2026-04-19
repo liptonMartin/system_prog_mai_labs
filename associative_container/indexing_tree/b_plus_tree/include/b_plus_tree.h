@@ -341,6 +341,36 @@ private:
 
     void handle_fill_middle_node(bptree_node_middle *node, bptree_node_middle *second_child, size_t middle);
 
+    void rebalancing_after_erase(std::stack<std::pair<bptree_node_base *, size_t> > &path);
+
+    void handle_rebalancing_from_empty_root();
+
+    void borrow_from_left_brother_middle(bptree_node_middle *node, bptree_node_middle *left_brother,
+                                         bptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_left_brother_term(bptree_node_term *node, bptree_node_term *left_brother,
+                                       bptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_right_brother_middle(bptree_node_middle *node, bptree_node_middle *right_brother,
+                                          bptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_right_brother_term(bptree_node_term *node, bptree_node_term *right_brother,
+                                        bptree_node_middle *parent, size_t parent_index);
+
+    void merge(bptree_node_base *left, bptree_node_base *right, bptree_node_middle *parent, size_t parent_index);
+
+    void merge_terminate_nodes(bptree_node_term *left, bptree_node_term *right, bptree_node_middle *parent,
+                               size_t parent_index);
+
+    void merge_middle_nodes(bptree_node_middle *left, bptree_node_middle *right, bptree_node_middle *parent,
+                            size_t parent_index);
+
+    bool is_left_brother_exist(size_t parent_index);
+
+    bool is_right_brother_exist(bptree_node_middle *parent, size_t parent_index);
+
+    bool is_node_has_more_minimum_elements(bptree_node_base *node);
+
 
     // endregion
 };
@@ -1039,6 +1069,245 @@ void BP_tree<tkey, tvalue, compare, t>::handle_fill_middle_node(bptree_node_midd
     node->_pointers.erase(node->_pointers.begin() + middle + 1, node->_pointers.end());
 }
 
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
+    std::stack<std::pair<bptree_node_base *, size_t> > &path) {
+    auto [node, parent_index] = path.top();
+    path.pop();
+
+    if (node->keys_size() >= minimum_keys_in_node) return;
+
+    if (path.empty()) {
+        if (node == _root) {
+            if (node->keys_size() == 0) {
+                handle_rebalancing_from_empty_root();
+            }
+            return; /* если это корень, то можно удалять, пока не закончатся узлы */
+        }
+        throw std::logic_error("Rebalancing from node without parent and it isn't root!");
+    }
+
+    auto [parent, parent_index_index] = path.top();
+    auto parent_middle = dynamic_cast<bptree_node_middle *>(parent);
+    if (!parent_middle) throw std::logic_error("Parent node is not middle node!");
+
+    auto node_term = dynamic_cast<bptree_node_term *>(node);
+    auto node_middle = dynamic_cast<bptree_node_middle *>(node);
+
+    /* пробуем занять у левого соседа */
+    if (is_left_brother_exist(parent_index)) {
+        auto left_brother = parent_middle->_pointers[parent_index - 1];
+        if (is_node_has_more_minimum_elements(left_brother)) {
+            /* можно занять у левого брата */
+            if (auto left_brother_middle = dynamic_cast<bptree_node_middle *>(left_brother)) {
+                borrow_from_left_brother_middle(node_middle, left_brother_middle, parent_middle, parent_index);
+            } else if (auto left_brother_term = dynamic_cast<bptree_node_term *>(left_brother)) {
+                borrow_from_left_brother_term(node_term, left_brother_term, parent_middle, parent_index);
+            }
+            return;
+        }
+    }
+
+    /* пробуем занять у правого соседа */
+    if (is_right_brother_exist(parent_middle, parent_index)) {
+        auto right_brother = parent_middle->_pointers[parent_index + 1];
+        if (is_node_has_more_minimum_elements(right_brother)) {
+            if (auto right_brother_middle = dynamic_cast<bptree_node_middle *>(right_brother)) {
+                borrow_from_right_brother_middle(node_middle, right_brother_middle, parent_middle, parent_index);
+            } else if (auto right_brother_term = dynamic_cast<bptree_node_term *>(right_brother)) {
+                borrow_from_right_brother_term(node_term, right_brother_term, parent_middle, parent_index);
+            }
+            return;
+        }
+    }
+
+    /* занять у соседей не получилось, пытаемся объединиться */
+    /* пробуем объединиться с правым соседом */
+    if (is_right_brother_exist(parent_middle, parent_index)) {
+        auto right_brother = parent_middle->_pointers[parent_index + 1];
+        merge(node, right_brother, parent_middle, parent_index);
+        rebalancing_after_erase(path);
+    }
+    /* пробуем объединиться с левым соседом */
+    else if (is_left_brother_exist(parent_index)) {
+        auto left_brother = parent_middle->_pointers[parent_index - 1];
+        merge(left_brother, node, parent_middle, parent_index - 1);
+        rebalancing_after_erase(path);
+    }
+    else throw std::logic_error("The node doesn't have brothers and it isn't a root!");
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::handle_rebalancing_from_empty_root() {
+    if (auto root_middle = dynamic_cast<bptree_node_middle *>(_root)) {
+        if (root_middle->_pointers.size() > 1)
+            throw std::logic_error(
+                "The root has 1 element, but it has more than 1 child");
+        auto child = root_middle->_pointers[0];
+
+        get_allocator().template delete_object<bptree_node_middle>(root_middle);
+        _root = child; /* удалили корень, теперь корень новый */
+    } else if (auto root_term = dynamic_cast<bptree_node_term *>(_root)) {
+        get_allocator().template delete_object<bptree_node_term>(root_term);
+    } else throw std::logic_error("The root has unknown type");
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::borrow_from_left_brother_middle(bptree_node_middle *node,
+                                                                        bptree_node_middle *left_brother,
+                                                                        bptree_node_middle *parent,
+                                                                        size_t parent_index) {
+    /* как и в обычном b-дереве: удаляем из левого, добавляем в родителя, из родителя добавляем в наш узел */
+    auto element_from_left = left_brother->_keys.back();
+    left_brother->_keys.pop_back();
+
+    auto element_from_parent = parent->_keys[parent_index];
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+
+    parent->_keys.insert(parent->_keys.begin() + parent_index, element_from_left);
+    node->_keys.insert(node->_keys.begin(), element_from_parent);
+
+    auto child_from_left = left_brother->_pointers.back();
+    left_brother->_pointers.pop_back();
+    node->_pointers.insert(node->_pointers.begin(), child_from_left);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::borrow_from_left_brother_term(bptree_node_term *node,
+                                                                      bptree_node_term *left_brother,
+                                                                      bptree_node_middle *parent, size_t parent_index) {
+    /* Так как в родителе не хранится сам элемент, а только ключ (просто ссылка), то нужно
+     * обновить информацию в родителе (добавить element_from_left.first) в родителя, а также
+     * добавить сам элемент element_from_left в наш текущий узел! */
+    auto element_from_left = left_brother->_data.back();
+    left_brother->_data.pop_back();
+
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+    parent->_keys.insert(parent->_keys.begin() + parent_index, element_from_left.first);
+
+    node->_data.insert(node->_keys.begin(), element_from_left);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::borrow_from_right_brother_middle(bptree_node_middle *node,
+                                                                         bptree_node_middle *right_brother,
+                                                                         bptree_node_middle *parent,
+                                                                         size_t parent_index) {
+    /* как и в обычном b-дереве: удаляем из правого, добавляем в родителя, из родителя добавляем в наш узел */
+    auto element_from_right = right_brother->_keys.front();
+    right_brother->_keys.erase(right_brother->_keys.begin());
+
+    auto element_from_parent = parent->_keys[parent_index + 1];
+    parent->_keys.erase(parent->_keys.begin() + parent_index + 1);
+
+    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, element_from_right);
+    node->_keys.push_back(element_from_parent);
+
+    auto child_from_right = right_brother->_pointers.front();
+    right_brother->_pointers.erase(right_brother->_pointers.begin());
+    node->_pointers.push_back(child_from_right);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::borrow_from_right_brother_term(bptree_node_term *node,
+                                                                       bptree_node_term *right_brother,
+                                                                       bptree_node_middle *parent,
+                                                                       size_t parent_index) {
+    /* Так как в родителе не хранится сам элемент, а только ключ (просто ссылка), то нужно
+     * обновить информацию в родителе (добавить element_from_right.first) в родителя, а также
+     * добавить сам элемент element_from_right в наш текущий узел! */
+    auto element_from_right = right_brother->_data.front();
+    right_brother->_data.erase(right_brother->_data.begin());
+
+    parent->_keys.erase(parent->_keys.begin() + parent_index + 1);
+    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, element_from_right.first);
+
+    node->_data.push_back(element_from_right);
+}
+
+/**
+ * Функция обертка над merge_terminate_nodes и merge_middle_nodes. Получается указатели на абстрактные классы и
+ * делегирует задачу этим функциям
+ * @param left Указатель на левый узел
+ * @param right Указатель на правый узел
+ * @param parent Указатель на родитель
+ * @param parent_index Индекс в родителе, который разделяет эти два узла
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::merge(bptree_node_base *left, bptree_node_base *right,
+                                              bptree_node_middle *parent, size_t parent_index) {
+    if (auto left_middle = dynamic_cast<bptree_node_middle *>(left), right_middle = dynamic_cast<bptree_node_middle *>(
+                    right); left_middle && right_middle) {
+        merge_middle_nodes(left_middle, right_middle, parent, parent_index);
+    } else if (auto left_term = dynamic_cast<bptree_node_term *>(left), right_term = dynamic_cast<bptree_node_term *>(
+                    right); left_term && right_term) {
+        merge_terminate_nodes(left_term, right_term, parent, parent_index);
+    } else throw std::logic_error("Left and right haven't the different types");
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::merge_terminate_nodes(bptree_node_term *left, bptree_node_term *right,
+                                                              bptree_node_middle *parent,
+                                                              size_t parent_index) {
+    /* Merge листов очень похож на merge b-tree, за исключением того, что в родителе хранится фиктивный элемент,
+     * который не нужно добавлять в сыновей. Его нужно просто удалить.
+     */
+
+    /* удаляем ключ из родителя */
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+
+    /* добавляем весь соседний правый узел */
+    left->_data.insert(left->_data.end(), right->_data.begin(), right->_data.end());
+
+    /* удаляем одного ребенка из родительского узла (правого соседа) */
+    parent->_pointers.erase(parent->_pointers.begin() + parent_index + 1);
+
+    /* если мы удалили элемент у корня, в котором не осталось элементов, то это хендлится на уровне rebalancing_after_erase */
+
+    get_allocator().template delete_object<bptree_node_middle>(right);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::merge_middle_nodes(bptree_node_middle *left, bptree_node_middle *right,
+                                                           bptree_node_middle *parent,
+                                                           size_t parent_index) {
+    /* добавляем ключ из родителя */
+    auto element_from_parent = parent->_keys[parent_index];
+    left->_keys.push_back(element_from_parent);
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+
+    /* добавляем весь соседний правый узел */
+    left->_keys.insert(left->_keys.end(), right->_keys.begin(), right->_keys.end());
+
+    /* добавляем детей */
+    left->_pointers.insert(left->_pointers.begin(), right->_pointers.begin(), right->_pointers.end());
+
+    /* удаляем одного ребенка из родительского узла (правого соседа) */
+    parent->_pointers.erase(parent->_pointers.begin() + parent_index + 1);
+
+    /* если мы занимали у корня, в котором не осталось элементов, то это хендлится на уровне rebalancing_after_erase */
+
+    get_allocator().template delete_object<bptree_node_middle>(right);
+}
+
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+bool BP_tree<tkey, tvalue, compare, t>::is_left_brother_exist(size_t parent_index) {
+    return parent_index != 0;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+bool BP_tree<tkey, tvalue, compare, t>::is_right_brother_exist(bptree_node_middle *parent, size_t parent_index) {
+    return parent_index + 1 < parent->_pointers.size();
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+bool BP_tree<tkey, tvalue, compare, t>::is_node_has_more_minimum_elements(bptree_node_base *node) {
+    return node->keys_size() > minimum_keys_in_node;
+}
+
+
 // endregion
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1122,9 +1391,23 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
     bptree_iterator pos) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(bptree_iterator pos)",
-        "your code should be here...");
+    auto key = pos->first;
+    auto path_to_root = search_terminate_node(key);
+
+    auto *last_node = path_to_root.get_last_node();
+    auto index = path_to_root.get_index();
+    auto &path = path_to_root.get_path();
+
+    auto last_node_term = dynamic_cast<bptree_node_term *>(last_node);
+    if (last_node_term == nullptr) {
+        std::string message = std::format("Attempt to erase node(first key = {}) is not a leaf!", last_node->keys()[0]);
+        throw std::logic_error(message);
+    }
+
+    last_node_term->_data.erase(last_node_term->_data.begin() + index);
+    rebalancing_after_erase(path);
+    --_size;
+    return upper_bound(key); /* следующий элемент после удаленного */
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
