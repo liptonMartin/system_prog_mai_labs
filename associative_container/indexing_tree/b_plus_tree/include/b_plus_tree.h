@@ -44,7 +44,9 @@ private:
 
         bptree_node_base() noexcept;
 
-        virtual boost::container::static_vector<tkey, maximum_keys_in_node + 1> &keys() = 0;
+        virtual size_t keys_size() = 0;
+
+        virtual boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() = 0;
 
         virtual ~bptree_node_base() = default;
     };
@@ -56,7 +58,15 @@ private:
 
         bptree_node_term() noexcept;
 
-        boost::container::static_vector<tkey, maximum_keys_in_node + 1> &keys() override;
+        size_t keys_size() override { return _data.size(); }
+
+        boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() override {
+            auto keys = boost::container::static_vector<tkey, maximum_keys_in_node + 1>{};
+            for (auto &elem: _data) {
+                keys.push_back(elem.first);
+            }
+            return keys;
+        };
     };
 
     struct bptree_node_middle : public bptree_node_base {
@@ -65,7 +75,8 @@ private:
 
         bptree_node_middle() noexcept;
 
-        boost::container::static_vector<tkey, maximum_keys_in_node + 1> &keys() override;
+        size_t keys_size() override { return _keys.size(); }
+        boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() override { return _keys; };
     };
 
     pp_allocator<value_type> _allocator;
@@ -279,15 +290,56 @@ public:
 
     bptree_iterator erase(bptree_const_iterator beg, bptree_const_iterator en);
 
-
     bptree_iterator erase(const tkey &key);
 
     // endregion modifiers declaration
+
+    // region debug functions
+
+    void print_tree();
+    void print_node(bptree_node_base* node, int depth = 0);
+
+    // endregion
 
 private:
     // region helper functions for begins
 
     bptree_node_term *first_terminate_node();
+
+    // endregion
+
+    // helper functions for modifiers
+
+    class path_position {
+        std::stack<std::pair<bptree_node_base *, size_t> > _path;
+        size_t _index;
+
+    public:
+        path_position(
+            std::stack<std::pair<bptree_node_base *, size_t> > path = std::stack<std::pair<bptree_node_base *, size_t> >
+                    {}, size_t index = 0);
+
+        std::stack<std::pair<bptree_node_base *, size_t> > &get_path();
+
+        bptree_node_base *get_last_node();
+
+        size_t get_index();
+
+        void set_index(size_t index);
+    };
+
+    friend class path_position;
+
+    path_position search_terminate_node(tkey key);
+
+    void rebalancing_after_insert(std::stack<std::pair<bptree_node_base *, size_t> > &path);
+
+    void split(bptree_node_base *node, std::stack<std::pair<bptree_node_base *, size_t> > &path, size_t parent_index);
+
+    void handle_fill_term_node(bptree_node_term *node, bptree_node_term *second_child, size_t middle);
+
+    void handle_fill_middle_node(bptree_node_middle *node, bptree_node_middle *second_child, size_t middle);
+
 
     // endregion
 };
@@ -302,6 +354,41 @@ BP_tree(iterator begin, iterator end, const compare &cmp = compare(),
 template<typename tkey, typename tvalue, comparator<tkey> compare = std::less<tkey>, std::size_t t = 5, typename U>
 BP_tree(std::initializer_list<std::pair<tkey, tvalue> > data, const compare &cmp = compare(),
         pp_allocator<U> = pp_allocator<U>()) -> BP_tree<tkey, tvalue, compare, t>;
+
+// region debug impl
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::print_tree() {
+    if (_root) print_node(_root);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::print_node(bptree_node_base* node, int depth) {
+    std::cout << std::string(depth, ' ');
+
+    auto keys = node->keys();
+    std::cout << '[';
+    for (int i = 0; i < node->keys_size(); ++i) {
+        std::cout << (keys[i]);
+        if (i != node->keys_size() - 1) std::cout << "|";
+    }
+    std::cout << "]\n" << std::flush;
+
+    if (auto node_middle = dynamic_cast<bptree_node_middle*>(node)) {
+        std::cout << "(" << keys[0] << ')';
+        print_node(node_middle->_pointers[0], depth + 1);
+
+        for (int i = 0; i < node->keys_size(); ++i) {
+            if (node_middle->_pointers[i + 1]) {
+                std::cout << '(' << keys[i] << ')';
+                print_node(node_middle->_pointers[i + 1], depth + 1);
+            }
+        }
+    }
+
+}
+
+// endregion debug impl
 
 // region comparators impl
 
@@ -339,29 +426,6 @@ BP_tree<tkey, tvalue, compare, t>::bptree_node_middle::bptree_node_middle() noex
 }
 
 // endregion node constructors impl
-
-// region node virtual functions impl
-
-template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-boost::container::static_vector<tkey, BP_tree<tkey, tvalue, compare, t>::maximum_keys_in_node + 1> &BP_tree<tkey, tvalue
-    , compare,
-    t>::bptree_node_term::keys() {
-    auto keys = boost::container::static_vector<tkey, maximum_keys_in_node + 1>{};
-    for (auto &elem: _data) {
-        keys.push_back(elem.first);
-    }
-    return keys;
-}
-
-template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-boost::container::static_vector<tkey, BP_tree<tkey, tvalue, compare, t>::maximum_keys_in_node + 1> &BP_tree<tkey, tvalue
-    , compare,
-    t>::bptree_node_middle::keys() {
-    return _keys;
-}
-
-
-// endregion
 
 // region getters
 
@@ -704,7 +768,9 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
         }
 
         /* такой ключ существует в листе */
-        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(node, l);
+        if (node->_is_terminate && equal(keys[l], key))
+            return bptree_iterator(
+                dynamic_cast<bptree_node_term *>(node), l);
 
         /* нужно перейти в самого левого ребенка */
         if (less(key, keys[l])) --l;
@@ -784,7 +850,7 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::upper_bound(
     const tkey &key) const {
-    return bstree_const_iterator(const_cast<BP_tree*>(this)->upper_bound(key));
+    return bstree_const_iterator(const_cast<BP_tree *>(this)->upper_bound(key));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -796,11 +862,184 @@ bool BP_tree<tkey, tvalue, compare, t>::contains(const tkey &key) const {
 
 // region modifiers impl
 
+// region helper functions for modifiers impl
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+BP_tree<tkey, tvalue, compare, t>::path_position::path_position(
+    std::stack<std::pair<bptree_node_base *, size_t> > path,
+    size_t index)
+    : _path(path), _index(index) {
+}
+
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+std::stack<std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_node_base *, size_t> > &BP_tree<tkey, tvalue,
+    compare,
+    t>::path_position::get_path() {
+    return _path;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+BP_tree<tkey, tvalue, compare, t>::bptree_node_base *BP_tree<tkey, tvalue, compare,
+    t>::path_position::get_last_node() {
+    if (_path.empty()) return nullptr;
+    auto [node, _] = _path.top();
+    return node;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+size_t BP_tree<tkey, tvalue, compare, t>::path_position::get_index() {
+    return _index;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::path_position::set_index(size_t index) {
+    _index = index;
+}
+
+/**
+ * Обертка над lower_bound, которая возвращает путь до узла.
+ * В случае, если дерево пустое, то оно не создает новый узел
+ * @param key Ключ, по которому производится поиск
+ * @return Путь от корня до узла
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+BP_tree<tkey, tvalue, compare, t>::path_position BP_tree<tkey, tvalue, compare, t>::search_terminate_node(tkey key) {
+    if (_root == nullptr) return path_position();
+
+    auto *node = _root;
+    size_t index = 0;
+    std::stack<std::pair<bptree_node_base *, size_t> > path{};
+    path.emplace(_root, 0);
+
+    do {
+        auto keys = node->keys();
+        /* бинарный поиск по ключам */
+        size_t l = 0;
+        size_t r = keys.size();
+        while (l + 1 < r) {
+            size_t m = (l + r) / 2;
+
+            if (less_or_equal(keys[m], key)) {
+                /* keys[m] <= key */
+                l = m;
+            } else {
+                r = m;
+            }
+        }
+
+        /* нужно перейти в самого левого ребенка или дошли до конца, значит l увеличивать не нужно */
+        if (!(node->_is_terminate || less(key, keys[l]))) ++l;
+
+        auto middle_node = dynamic_cast<bptree_node_middle *>(node);
+        if (middle_node != nullptr) {
+            node = middle_node->_pointers[l];
+            path.emplace(middle_node->_pointers[l], l);
+        }
+        index = l;
+    } while (!node->_is_terminate);
+
+    auto less_or_equal_key = node->keys()[index]; /* ключ, который меньше или равен нашему */
+    /* в случае (index == 0 && key < less_or_equal_key) мы уже находимся на элементе, который больше нашего */
+    if (less_or_equal_key == key || (index == 0 && less(key, less_or_equal_key))) return path_position(path, index);
+    /* в случае, если мы находимся на последнем элементе, то как раз ++index будет указывать на последний (еще несуществующий) элемент*/
+    return path_position(path, ++index);
+}
+
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_insert(
+    std::stack<std::pair<bptree_node_base *, size_t> > &path) {
+    auto [node, parent_index] = path.top();
+    path.pop();
+
+    while (node->keys_size() > maximum_keys_in_node) {
+        split(node, path, parent_index);
+        if (!path.empty()) std::tie(node, parent_index) = path.top();
+        else break;
+        path.pop();
+    }
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::split(bptree_node_base *node,
+                                              std::stack<std::pair<bptree_node_base *, size_t> > &path,
+                                              size_t parent_index) {
+    bptree_node_middle *parent = nullptr;
+    if (!path.empty()) {
+        parent = dynamic_cast<bptree_node_middle *>(path.top().first);
+        if (parent == nullptr) throw std::logic_error("Parent isn't a middle node!");
+    } else {
+        parent = get_allocator().template new_object<bptree_node_middle>();
+        parent_index = 0;
+        _root = parent;
+    }
+
+    auto middle = node->keys_size() / 2;
+    tkey data;
+
+    bptree_node_base *second_child = nullptr;
+    if (node->_is_terminate) {
+        /* создаем брата как лист */
+        second_child = get_allocator().template new_object<bptree_node_term>();
+    } else {
+        /* создаем брата как не лист, не забываем добавлять сыновей */
+        second_child = get_allocator().template new_object<bptree_node_middle>();
+    }
+
+    if (auto second_child_middle = dynamic_cast<bptree_node_middle *>(second_child), node_middle = dynamic_cast<
+                    bptree_node_middle *>(second_child_middle); second_child_middle && node_middle) {
+        /* если это внутренний узел */
+        data = node_middle->_keys[middle];
+        handle_fill_middle_node(node_middle, second_child_middle, middle);
+    } else if (auto second_child_term = dynamic_cast<bptree_node_term *>(second_child), node_term = dynamic_cast<
+                    bptree_node_term *>(node); second_child_term && node_term) {
+        /* если это лист */
+        data = node_term->_data[middle].first;
+        handle_fill_term_node(node_term, second_child_term, middle);
+    } else {
+        throw std::logic_error("Node and second node aren't the same type!");
+    }
+
+    /* заполняем родителя */
+
+    parent->_keys.insert(parent->_keys.begin() + parent_index, data);
+    if (parent->_pointers.empty()) parent->_pointers.push_back(node); /* если родителя не было, там и детей нет */
+    parent->_pointers.insert(parent->_pointers.begin() + parent_index + 1, second_child);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::handle_fill_term_node(bptree_node_term *node, bptree_node_term *second_child, size_t middle) {
+    /* добавляем ключи в новый узел */
+    second_child->_data.insert(second_child->_data.end(), node->_data.begin() + middle,
+                               node->_data.end());
+    node->_data.erase(node->_data.begin() + middle, node->_data.end());
+
+    /* обновляем указатель на следующий элемент */
+    second_child->_next = node->_next;
+    node->_next = second_child;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::handle_fill_middle_node(bptree_node_middle *node,
+                                                                bptree_node_middle *second_child, size_t middle) {
+    /* добавляем ключи в новый узел */
+    second_child->_keys.insert(second_child->_keys.end(), node->_keys.begin() + middle,
+                               node->_keys.end());
+    node->_keys.erase(node->_keys.begin() + middle, node->_keys.end());
+
+    /* переносим детей */
+    second_child->_pointers.insert(second_child->_pointers.end(),
+                                   node->_pointers.begin() + middle + 1,
+                                   node->_pointers.end());
+    node->_pointers.erase(node->_pointers.begin() + middle + 1, node->_pointers.end());
+}
+
+// endregion
+
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::clear() noexcept {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> void BP_tree<tkey, tvalue, compare, t>::clear() noexcept",
-        "your code should be here...");
+    // TODO: impl it!
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -821,9 +1060,34 @@ template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t
 template<typename... Args>
 std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator, bool> BP_tree<tkey, tvalue, compare,
     t>::emplace(Args &&... args) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> template <typename ...Args> std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator, bool> BP_tree<tkey, tvalue, compare, t>::emplace(Args&&... args)",
-        "your code should be here...");
+    tree_data_type data(std::forward<Args>(args)...);
+
+    if (contains(data.first)) return {end(), false};
+
+    auto path_to_root = search_terminate_node(data.first);
+
+    auto *last_node = path_to_root.get_last_node();
+    auto index = path_to_root.get_index();
+    auto &path = path_to_root.get_path();
+
+    if (last_node == nullptr) {
+        /* дерево пустое */
+        auto new_root = get_allocator().template new_object<bptree_node_term>();
+        new_root->_data.push_back(data);
+        _root = new_root;
+        path.emplace(new_root, 0);
+    } else {
+        auto terminate_node = dynamic_cast<bptree_node_term *>(last_node);
+        if (terminate_node == nullptr) {
+            const std::string message = std::format("The node(first key = {}) isn't a leaf!", data.first);
+            throw std::logic_error(message);
+        }
+        terminate_node->_data.insert(terminate_node->_data.begin() + index, data);
+    }
+
+    rebalancing_after_insert(path);
+    ++_size;
+    return {find(data.first), true};
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
