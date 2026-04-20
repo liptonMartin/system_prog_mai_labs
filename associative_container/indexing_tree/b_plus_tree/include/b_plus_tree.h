@@ -1082,14 +1082,6 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
     auto [node, parent_index] = path.back();
     path.pop_back();
 
-    if (node->keys_size() >= minimum_keys_in_node) {
-        if (node->_is_terminate) {
-            auto new_key = node->keys()[0];
-            update_references_in_parent(path, old_key, new_key);
-        }
-        return;
-    }
-
     if (path.empty()) {
         if (node == _root) {
             if (node->keys_size() == 0) {
@@ -1098,6 +1090,14 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
             return; /* если это корень, то можно удалять, пока не закончатся узлы */
         }
         throw std::logic_error("Rebalancing from node without parent and it isn't root!");
+    }
+
+    if (node->keys_size() >= minimum_keys_in_node) {
+        if (node->_is_terminate) {
+            auto new_key = node->keys()[0];
+            update_references_in_parent(path, old_key, new_key);
+        }
+        return;
     }
 
     auto [parent, parent_index_index] = path.back();
@@ -1195,6 +1195,7 @@ void BP_tree<tkey, tvalue, compare, t>::handle_rebalancing_from_empty_root() {
         _root = child; /* удалили корень, теперь корень новый */
     } else if (auto root_term = dynamic_cast<bptree_node_term *>(_root)) {
         get_allocator().template delete_object<bptree_node_term>(root_term);
+        _root = nullptr;
     } else throw std::logic_error("The root has unknown type");
 }
 
