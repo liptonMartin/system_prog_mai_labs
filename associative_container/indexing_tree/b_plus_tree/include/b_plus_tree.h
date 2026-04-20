@@ -312,15 +312,15 @@ private:
     // helper functions for modifiers
 
     class path_position {
-        std::stack<std::pair<bptree_node_base *, size_t> > _path;
+        std::vector<std::pair<bptree_node_base *, size_t> > _path;
         size_t _index;
 
     public:
         path_position(
-            std::stack<std::pair<bptree_node_base *, size_t> > path = std::stack<std::pair<bptree_node_base *, size_t> >
-                    {}, size_t index = 0);
+            std::vector<std::pair<bptree_node_base *, size_t> > path = std::vector<std::pair<bptree_node_base *,
+                size_t> >{}, size_t index = 0);
 
-        std::stack<std::pair<bptree_node_base *, size_t> > &get_path();
+        std::vector<std::pair<bptree_node_base *, size_t> > &get_path();
 
         bptree_node_base *get_last_node();
 
@@ -333,15 +333,15 @@ private:
 
     path_position search_terminate_node(tkey key);
 
-    void rebalancing_after_insert(std::stack<std::pair<bptree_node_base *, size_t> > &path);
+    void rebalancing_after_insert(std::vector<std::pair<bptree_node_base *, size_t> > &path);
 
-    void split(bptree_node_base *node, std::stack<std::pair<bptree_node_base *, size_t> > &path, size_t parent_index);
+    void split(bptree_node_base *node, std::vector<std::pair<bptree_node_base *, size_t> > &path, size_t parent_index);
 
     void handle_fill_term_node(bptree_node_term *node, bptree_node_term *second_child, size_t middle);
 
     void handle_fill_middle_node(bptree_node_middle *node, bptree_node_middle *second_child, size_t middle);
 
-    void rebalancing_after_erase(std::stack<std::pair<bptree_node_base *, size_t> > &path);
+    void rebalancing_after_erase(std::vector<std::pair<bptree_node_base *, size_t> > &path);
 
     void handle_rebalancing_from_empty_root();
 
@@ -843,8 +843,9 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
         }
 
         /* такой ключ существует в листе */
-        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(
-            dynamic_cast<bptree_node_term *>(node), l);
+        if (node->_is_terminate && equal(keys[l], key))
+            return bptree_iterator(
+                dynamic_cast<bptree_node_term *>(node), l);
 
         /* нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
         if (!(less(key, keys[l]))) ++l;
@@ -898,14 +899,14 @@ bool BP_tree<tkey, tvalue, compare, t>::contains(const tkey &key) const {
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BP_tree<tkey, tvalue, compare, t>::path_position::path_position(
-    std::stack<std::pair<bptree_node_base *, size_t> > path,
+    std::vector<std::pair<bptree_node_base *, size_t> > path,
     size_t index)
     : _path(path), _index(index) {
 }
 
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-std::stack<std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_node_base *, size_t> > &BP_tree<tkey, tvalue,
+std::vector<std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_node_base *, size_t> > &BP_tree<tkey, tvalue,
     compare,
     t>::path_position::get_path() {
     return _path;
@@ -915,7 +916,7 @@ template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t
 BP_tree<tkey, tvalue, compare, t>::bptree_node_base *BP_tree<tkey, tvalue, compare,
     t>::path_position::get_last_node() {
     if (_path.empty()) return nullptr;
-    auto [node, _] = _path.top();
+    auto [node, _] = _path.back();
     return node;
 }
 
@@ -941,8 +942,8 @@ BP_tree<tkey, tvalue, compare, t>::path_position BP_tree<tkey, tvalue, compare, 
 
     auto *node = _root;
     size_t index = 0;
-    std::stack<std::pair<bptree_node_base *, size_t> > path{};
-    path.emplace(_root, 0);
+    std::vector<std::pair<bptree_node_base *, size_t> > path{};
+    path.emplace_back(_root, 0);
     tkey less_or_equal_key = node->keys()[index]; /* будем хранить последний ключ, который мы посетили */
 
     while (node) {
@@ -969,7 +970,7 @@ BP_tree<tkey, tvalue, compare, t>::path_position BP_tree<tkey, tvalue, compare, 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
         if (middle_node != nullptr) {
             node = middle_node->_pointers[l];
-            path.emplace(middle_node->_pointers[l], l);
+            path.emplace_back(middle_node->_pointers[l], l);
         } else node = nullptr;
         index = l;
     }
@@ -983,25 +984,25 @@ BP_tree<tkey, tvalue, compare, t>::path_position BP_tree<tkey, tvalue, compare, 
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_insert(
-    std::stack<std::pair<bptree_node_base *, size_t> > &path) {
-    auto [node, parent_index] = path.top();
-    path.pop();
+    std::vector<std::pair<bptree_node_base *, size_t> > &path) {
+    auto [node, parent_index] = path.back();
+    path.pop_back();
 
     while (node->keys_size() > maximum_keys_in_node) {
         split(node, path, parent_index);
-        if (!path.empty()) std::tie(node, parent_index) = path.top();
+        if (!path.empty()) std::tie(node, parent_index) = path.back();
         else break;
-        path.pop();
+        path.pop_back();
     }
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::split(bptree_node_base *node,
-                                              std::stack<std::pair<bptree_node_base *, size_t> > &path,
+                                              std::vector<std::pair<bptree_node_base *, size_t> > &path,
                                               size_t parent_index) {
     bptree_node_middle *parent = nullptr;
     if (!path.empty()) {
-        parent = dynamic_cast<bptree_node_middle *>(path.top().first);
+        parent = dynamic_cast<bptree_node_middle *>(path.back().first);
         if (parent == nullptr) throw std::logic_error("Parent isn't a middle node!");
     } else {
         parent = get_allocator().template new_object<bptree_node_middle>();
@@ -1074,9 +1075,9 @@ void BP_tree<tkey, tvalue, compare, t>::handle_fill_middle_node(bptree_node_midd
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
-    std::stack<std::pair<bptree_node_base *, size_t> > &path) {
-    auto [node, parent_index] = path.top();
-    path.pop();
+    std::vector<std::pair<bptree_node_base *, size_t> > &path) {
+    auto [node, parent_index] = path.back();
+    path.pop_back();
 
     if (node->keys_size() >= minimum_keys_in_node) return;
 
@@ -1090,7 +1091,7 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
         throw std::logic_error("Rebalancing from node without parent and it isn't root!");
     }
 
-    auto [parent, parent_index_index] = path.top();
+    auto [parent, parent_index_index] = path.back();
     auto parent_middle = dynamic_cast<bptree_node_middle *>(parent);
     if (!parent_middle) throw std::logic_error("Parent node is not middle node!");
 
@@ -1353,7 +1354,7 @@ std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator, bool> BP_
         auto new_root = get_allocator().template new_object<bptree_node_term>();
         new_root->_data.push_back(data);
         _root = new_root;
-        path.emplace(new_root, 0);
+        path.emplace_back(new_root, 0);
     } else {
         auto terminate_node = dynamic_cast<bptree_node_term *>(last_node);
         if (terminate_node == nullptr) {
