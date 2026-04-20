@@ -341,7 +341,10 @@ private:
 
     void handle_fill_middle_node(bptree_node_middle *node, bptree_node_middle *second_child, size_t middle);
 
-    void rebalancing_after_erase(std::vector<std::pair<bptree_node_base *, size_t> > &path);
+    void rebalancing_after_erase(std::vector<std::pair<bptree_node_base *, size_t> > &path, tkey &old_key);
+
+    void update_references_in_parent(std::vector<std::pair<bptree_node_base *, size_t> > &path, tkey &old_key,
+                                     tkey new_key);
 
     void handle_rebalancing_from_empty_root();
 
@@ -801,8 +804,8 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
             return bptree_iterator(
                 dynamic_cast<bptree_node_term *>(node), l);
 
-        /* нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
-        if (!(less(key, keys[l]))) ++l;
+        /* мы уже в листовых узлах или нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
+        if (!(node->_is_terminate || less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
         if (middle_node != nullptr) node = middle_node->_pointers[l];
@@ -847,8 +850,8 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
             return bptree_iterator(
                 dynamic_cast<bptree_node_term *>(node), l);
 
-        /* нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
-        if (!(less(key, keys[l]))) ++l;
+        /* уже дошли до листового узла или нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
+        if (!(node->_is_terminate || less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
         if (middle_node != nullptr) {
@@ -1075,11 +1078,17 @@ void BP_tree<tkey, tvalue, compare, t>::handle_fill_middle_node(bptree_node_midd
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
-    std::vector<std::pair<bptree_node_base *, size_t> > &path) {
+    std::vector<std::pair<bptree_node_base *, size_t> > &path, tkey &old_key) {
     auto [node, parent_index] = path.back();
     path.pop_back();
 
-    if (node->keys_size() >= minimum_keys_in_node) return;
+    if (node->keys_size() >= minimum_keys_in_node) {
+        if (node->_is_terminate) {
+            auto new_key = node->keys()[0];
+            update_references_in_parent(path, old_key, new_key);
+        }
+        return;
+    }
 
     if (path.empty()) {
         if (node == _root) {
@@ -1107,6 +1116,8 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
                 borrow_from_left_brother_middle(node_middle, left_brother_middle, parent_middle, parent_index);
             } else if (auto left_brother_term = dynamic_cast<bptree_node_term *>(left_brother)) {
                 borrow_from_left_brother_term(node_term, left_brother_term, parent_middle, parent_index);
+                auto new_key = node_term->_data[0].first;
+                update_references_in_parent(path, old_key, new_key);
             }
             return;
         }
@@ -1120,6 +1131,8 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
                 borrow_from_right_brother_middle(node_middle, right_brother_middle, parent_middle, parent_index);
             } else if (auto right_brother_term = dynamic_cast<bptree_node_term *>(right_brother)) {
                 borrow_from_right_brother_term(node_term, right_brother_term, parent_middle, parent_index);
+                auto new_key = node_term->_data[0].first;
+                update_references_in_parent(path, old_key, new_key);
             }
             return;
         }
@@ -1130,15 +1143,45 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
     if (is_right_brother_exist(parent_middle, parent_index)) {
         auto right_brother = parent_middle->_pointers[parent_index + 1];
         merge(node, right_brother, parent_middle, parent_index);
-        rebalancing_after_erase(path);
+        if (node->_is_terminate) {
+            auto new_key = node->keys()[0];
+            update_references_in_parent(path, old_key, new_key);
+        }
+        rebalancing_after_erase(path, old_key);
     }
     /* пробуем объединиться с левым соседом */
     else if (is_left_brother_exist(parent_index)) {
         auto left_brother = parent_middle->_pointers[parent_index - 1];
         merge(left_brother, node, parent_middle, parent_index - 1);
-        rebalancing_after_erase(path);
+        if (node->_is_terminate) {
+            auto new_key = left_brother->keys()[0];
+            update_references_in_parent(path, old_key, new_key);
+        }
+        rebalancing_after_erase(path, old_key);
     } else throw std::logic_error("The node doesn't have brothers and it isn't a root!");
 }
+
+
+/**
+ * Обновить все ссылки на удаленный узел
+ * @param path Вектор, в котором уже удален текущий узел (в котором мы удалили узел)
+ * @param old_key Старый ключ, который надо заменить
+ * @param new_key Новый ключ, на который нужно заменить
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BP_tree<tkey, tvalue, compare, t>::update_references_in_parent(std::vector<std::pair<bptree_node_base *,
+                                                                        size_t> > &path, tkey &old_key, tkey new_key) {
+    for (auto &item: path) {
+        auto [node, _] = item;
+        auto node_middle = dynamic_cast<bptree_node_middle *>(node);
+        if (!node_middle) throw std::logic_error("Node is not middle node!");
+
+        for (auto &key: node_middle->_keys) {
+            if (key == old_key) key = new_key;
+        }
+    }
+}
+
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::handle_rebalancing_from_empty_root() {
@@ -1239,6 +1282,7 @@ void BP_tree<tkey, tvalue, compare, t>::borrow_from_right_brother_term(bptree_no
  * @param right Указатель на правый узел
  * @param parent Указатель на родитель
  * @param parent_index Индекс в родителе, который разделяет эти два узла
+ * @param old_key Ключ, который мы удалили
  */
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::merge(bptree_node_base *left, bptree_node_base *right,
@@ -1416,8 +1460,9 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
         throw std::logic_error(message);
     }
 
+    auto deleted_element = last_node_term->_data[index];
     last_node_term->_data.erase(last_node_term->_data.begin() + index);
-    rebalancing_after_erase(path);
+    rebalancing_after_erase(path, deleted_element.first);
     --_size;
     return upper_bound(key); /* следующий элемент после удаленного */
 }
