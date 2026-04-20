@@ -545,7 +545,7 @@ BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator::bptree_const_iterator(
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator::reference BP_tree<tkey, tvalue, compare, t>::
 bptree_const_iterator::operator*() const noexcept {
-    return _node->_data[_index];
+    return reinterpret_cast<reference>(_node->_data[_index]);
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -843,7 +843,8 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
         }
 
         /* такой ключ существует в листе */
-        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(dynamic_cast<bptree_node_term*>(node), l);
+        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(
+            dynamic_cast<bptree_node_term *>(node), l);
 
         /* нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
         if (!(less(key, keys[l]))) ++l;
@@ -856,7 +857,7 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
         index = l;
     }
 
-    auto iterator = bptree_iterator(dynamic_cast<bptree_node_term*>(last_node), index);
+    auto iterator = bptree_iterator(dynamic_cast<bptree_node_term *>(last_node), index);
     /* в случае (index == 0 && key < (*iterator).first) мы уже находимся на элементе, который больше нашего */
     if (iterator->first == key || (index == 0 && key < iterator->first)) return iterator;
     return ++iterator; /* следующий элемент */
@@ -1135,8 +1136,7 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
         auto left_brother = parent_middle->_pointers[parent_index - 1];
         merge(left_brother, node, parent_middle, parent_index - 1);
         rebalancing_after_erase(path);
-    }
-    else throw std::logic_error("The node doesn't have brothers and it isn't a root!");
+    } else throw std::logic_error("The node doesn't have brothers and it isn't a root!");
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1396,6 +1396,12 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
     bptree_iterator pos) {
+    return erase(bptree_const_iterator(pos));
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
+    bptree_const_iterator pos) {
     auto key = pos->first;
     auto path_to_root = search_terminate_node(key);
 
@@ -1417,14 +1423,6 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
-    bptree_const_iterator pos) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(bptree_const_iterator pos)",
-        "your code should be here...");
-}
-
-template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
     bptree_iterator beg, bptree_iterator en) {
     throw not_implemented(
         "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(bptree_iterator beg, bptree_iterator en)",
@@ -1441,9 +1439,7 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(const tkey &key) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(const tkey& key)",
-        "your code should be here...");
+    return erase(find(key));
 }
 
 // endregion modifiers impl
