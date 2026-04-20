@@ -1331,7 +1331,7 @@ void BP_tree<tkey, tvalue, compare, t>::merge_middle_nodes(bptree_node_middle *l
     left->_keys.insert(left->_keys.end(), right->_keys.begin(), right->_keys.end());
 
     /* добавляем детей */
-    left->_pointers.insert(left->_pointers.begin(), right->_pointers.begin(), right->_pointers.end());
+    left->_pointers.insert(left->_pointers.end(), right->_pointers.begin(), right->_pointers.end());
 
     /* удаляем одного ребенка из родительского узла (правого соседа) */
     parent->_pointers.erase(parent->_pointers.begin() + parent_index + 1);
