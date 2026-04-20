@@ -801,11 +801,11 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
             return bptree_iterator(
                 dynamic_cast<bptree_node_term *>(node), l);
 
-        /* нужно перейти в самого левого ребенка */
-        if (less(key, keys[l])) --l;
+        /* нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
+        if (!(less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
-        if (middle_node != nullptr) node = middle_node->_pointers[l + 1];
+        if (middle_node != nullptr) node = middle_node->_pointers[l];
         else node = nullptr;
     }
 
@@ -824,6 +824,7 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
     if (_root == nullptr) return end();
 
     auto *node = _root;
+    auto *last_node = node;
     size_t index = 0;
     while (node != nullptr) {
         auto keys = node->keys();
@@ -842,20 +843,20 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
         }
 
         /* такой ключ существует в листе */
-        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(node, l);
+        if (node->_is_terminate && equal(keys[l], key)) return bptree_iterator(dynamic_cast<bptree_node_term*>(node), l);
 
-        /* нужно перейти в самого левого ребенка */
-        if (less(key, keys[l])) --l;
+        /* нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
+        if (!(less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
         if (middle_node != nullptr) {
-            ++l;
             node = middle_node->_pointers[l];
+            last_node = node;
         } else node = nullptr;
         index = l;
     }
 
-    auto iterator = bptree_iterator(node, index);
+    auto iterator = bptree_iterator(dynamic_cast<bptree_node_term*>(last_node), index);
     /* в случае (index == 0 && key < (*iterator).first) мы уже находимся на элементе, который больше нашего */
     if (iterator->first == key || (index == 0 && key < iterator->first)) return iterator;
     return ++iterator; /* следующий элемент */
@@ -959,9 +960,9 @@ BP_tree<tkey, tvalue, compare, t>::path_position BP_tree<tkey, tvalue, compare, 
             }
         }
 
-        /* нужно перейти в самого левого ребенка или дошли до конца, значит l увеличивать не нужно */
         less_or_equal_key = keys[l];
 
+        /* нужно перейти в самого левого ребенка или дошли до конца, значит l увеличивать не нужно */
         if (!(node->_is_terminate || less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bptree_node_middle *>(node);
@@ -1186,7 +1187,7 @@ void BP_tree<tkey, tvalue, compare, t>::borrow_from_left_brother_term(bptree_nod
     parent->_keys.erase(parent->_keys.begin() + parent_index);
     parent->_keys.insert(parent->_keys.begin() + parent_index, element_from_left.first);
 
-    node->_data.insert(node->_keys.begin(), element_from_left);
+    node->_data.insert(node->_data.begin(), element_from_left);
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1265,7 +1266,7 @@ void BP_tree<tkey, tvalue, compare, t>::merge_terminate_nodes(bptree_node_term *
 
     /* если мы удалили элемент у корня, в котором не осталось элементов, то это хендлится на уровне rebalancing_after_erase */
 
-    get_allocator().template delete_object<bptree_node_middle>(right);
+    get_allocator().template delete_object<bptree_node_term>(right);
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
