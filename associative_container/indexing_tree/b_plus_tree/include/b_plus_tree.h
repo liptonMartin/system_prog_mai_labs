@@ -1163,10 +1163,10 @@ void BP_tree<tkey, tvalue, compare, t>::borrow_from_left_brother_middle(bptree_n
     auto element_from_left = left_brother->_keys.back();
     left_brother->_keys.pop_back();
 
-    auto element_from_parent = parent->_keys[parent_index];
-    parent->_keys.erase(parent->_keys.begin() + parent_index);
+    auto element_from_parent = parent->_keys[parent_index - 1];
+    parent->_keys.erase(parent->_keys.begin() + parent_index - 1);
 
-    parent->_keys.insert(parent->_keys.begin() + parent_index, element_from_left);
+    parent->_keys.insert(parent->_keys.begin() + parent_index - 1, element_from_left);
     node->_keys.insert(node->_keys.begin(), element_from_parent);
 
     auto child_from_left = left_brother->_pointers.back();
@@ -1184,8 +1184,8 @@ void BP_tree<tkey, tvalue, compare, t>::borrow_from_left_brother_term(bptree_nod
     auto element_from_left = left_brother->_data.back();
     left_brother->_data.pop_back();
 
-    parent->_keys.erase(parent->_keys.begin() + parent_index);
-    parent->_keys.insert(parent->_keys.begin() + parent_index, element_from_left.first);
+    parent->_keys.erase(parent->_keys.begin() + parent_index - 1);
+    parent->_keys.insert(parent->_keys.begin() + parent_index - 1, element_from_left.first);
 
     node->_data.insert(node->_data.begin(), element_from_left);
 }
@@ -1199,10 +1199,10 @@ void BP_tree<tkey, tvalue, compare, t>::borrow_from_right_brother_middle(bptree_
     auto element_from_right = right_brother->_keys.front();
     right_brother->_keys.erase(right_brother->_keys.begin());
 
-    auto element_from_parent = parent->_keys[parent_index + 1];
-    parent->_keys.erase(parent->_keys.begin() + parent_index + 1);
+    auto element_from_parent = parent->_keys[parent_index];
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
 
-    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, element_from_right);
+    parent->_keys.insert(parent->_keys.begin() + parent_index, element_from_right);
     node->_keys.push_back(element_from_parent);
 
     auto child_from_right = right_brother->_pointers.front();
@@ -1217,12 +1217,16 @@ void BP_tree<tkey, tvalue, compare, t>::borrow_from_right_brother_term(bptree_no
                                                                        size_t parent_index) {
     /* Так как в родителе не хранится сам элемент, а только ключ (просто ссылка), то нужно
      * обновить информацию в родителе (добавить element_from_right.first) в родителя, а также
-     * добавить сам элемент element_from_right в наш текущий узел! */
+     * добавить сам элемент element_from_right в наш текущий узел!
+     * Так как в родителе хранится первый элемент из правого брата, то мы должны взять
+     * следующий элемент (next_element_from_right)!
+     */
     auto element_from_right = right_brother->_data.front();
     right_brother->_data.erase(right_brother->_data.begin());
+    auto next_element_from_right = right_brother->_data.front();
 
-    parent->_keys.erase(parent->_keys.begin() + parent_index + 1);
-    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, element_from_right.first);
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+    parent->_keys.insert(parent->_keys.begin() + parent_index, next_element_from_right.first);
 
     node->_data.push_back(element_from_right);
 }
