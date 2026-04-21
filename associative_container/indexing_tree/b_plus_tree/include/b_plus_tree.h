@@ -765,7 +765,7 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, 
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator BP_tree<tkey, tvalue, compare, t>::cbegin() const {
-    const auto *node = const_cast<bptree_node_term *>(first_terminate_node());
+    auto* node = (const_cast<BP_tree*>(this))->first_terminate_node();
     return bptree_const_iterator(node);
 }
 
