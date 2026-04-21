@@ -47,14 +47,14 @@ private:
     struct bsptree_node_term : public bsptree_node_base
     {
         bsptree_node_term* _next;
-        boost::container::static_vector<tree_data_type, maximum_keys_in_node + 1> _data;
+        boost::container::static_vector<tree_data_type, maximum_keys_in_root + 1> _data;
         bsptree_node_term() noexcept;
     };
 
     struct bsptree_node_middle : public bsptree_node_base
     {
-        boost::container::static_vector<tkey, maximum_keys_in_node + 1> _keys;
-        boost::container::static_vector<bsptree_node_base*, maximum_keys_in_node + 2> _pointers;
+        boost::container::static_vector<tkey, maximum_keys_in_root + 1> _keys;
+        boost::container::static_vector<bsptree_node_base*, maximum_keys_in_root + 2> _pointers;
         bsptree_node_middle() noexcept;
     };
 
