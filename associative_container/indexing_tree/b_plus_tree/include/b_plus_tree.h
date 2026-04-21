@@ -1143,6 +1143,7 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
     if (is_right_brother_exist(parent_middle, parent_index)) {
         auto right_brother = parent_middle->_pointers[parent_index + 1];
         merge(node, right_brother, parent_middle, parent_index);
+        right_brother = nullptr;
         if (node->_is_terminate) {
             auto new_key = node->keys()[0];
             update_references_in_parent(path, old_key, new_key);
@@ -1153,6 +1154,7 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
     else if (is_left_brother_exist(parent_index)) {
         auto left_brother = parent_middle->_pointers[parent_index - 1];
         merge(left_brother, node, parent_middle, parent_index - 1);
+        node = nullptr;
         if (left_brother->_is_terminate) {
             auto new_key = left_brother->keys()[0];
             update_references_in_parent(path, old_key, new_key);
@@ -1314,6 +1316,9 @@ void BP_tree<tkey, tvalue, compare, t>::merge_terminate_nodes(bptree_node_term *
     /* удаляем одного ребенка из родительского узла (правого соседа) */
     parent->_pointers.erase(parent->_pointers.begin() + parent_index + 1);
 
+    /* нужно обновить указатель на _next */
+    left->_next = right->_next;
+
     /* если мы удалили элемент у корня, в котором не осталось элементов, то это хендлится на уровне rebalancing_after_erase */
 
     get_allocator().template delete_object<bptree_node_term>(right);
@@ -1448,6 +1453,8 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
     bptree_const_iterator pos) {
+    if (pos == end()) return end();
+
     auto key = pos->first;
     auto path_to_root = search_terminate_node(key);
 
