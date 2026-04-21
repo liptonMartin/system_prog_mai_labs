@@ -691,7 +691,7 @@ typename BSP_tree<tkey, tvalue, compare, t>::bsptree_const_iterator BSP_tree<tke
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_const_iterator BSP_tree<tkey, tvalue, compare, t>::cbegin() const {
-    auto* node = (const_cast<BSP_tree*>(this))->first_terminate_node();
+    auto *node = (const_cast<BSP_tree *>(this))->first_terminate_node();
     return bsptree_const_iterator(node);
 }
 
