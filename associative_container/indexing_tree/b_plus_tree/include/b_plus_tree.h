@@ -698,8 +698,9 @@ BP_tree<tkey, tvalue, compare, t>::BP_tree(BP_tree &&other) noexcept
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BP_tree<tkey, tvalue, compare, t> &BP_tree<tkey, tvalue, compare, t>::operator=(const BP_tree &other) {
     if (this != &other) {
+        auto tmp = BP_tree(other);
         clear();
-        *this = BP_tree(other);
+        *this = tmp;
     }
     return *this;
 }
