@@ -200,9 +200,9 @@ public:
     /*
      * Returns a reference to the mapped value of the element with specified key. If no such element exists, an exception of type std::out_of_range is thrown.
      */
-    tvalue &at(const tkey &);
+    tvalue &at(const tkey &key);
 
-    const tvalue &at(const tkey &) const;
+    const tvalue &at(const tkey &key) const;
 
     /*
      * If key not exists, makes default initialization of value
@@ -614,23 +614,33 @@ BP_tree<tkey, tvalue, compare, t>::bptree_const_iterator::bptree_const_iterator(
 // region element access impl
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-tvalue &BP_tree<tkey, tvalue, compare, t>::at(const tkey &) {
-    throw not_implemented("too laazyy", "your code should be here...");
+tvalue &BP_tree<tkey, tvalue, compare, t>::at(const tkey &key) {
+    auto iterator = find(key);
+    if (iterator == end()) throw std::out_of_range("This key doesn't exist!");
+    return iterator->second;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-const tvalue &BP_tree<tkey, tvalue, compare, t>::at(const tkey &) const {
-    throw not_implemented("too laazyy", "your code should be here...");
+const tvalue &BP_tree<tkey, tvalue, compare, t>::at(const tkey &key) const {
+    auto iterator = find(key);
+    if (iterator == end()) throw std::out_of_range("This key doesn't exist!");
+    return iterator->second;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 tvalue &BP_tree<tkey, tvalue, compare, t>::operator[](const tkey &key) {
-    throw not_implemented("too laazyy", "your code should be here...");
+    auto iterator = find(key);
+    if (iterator == end()) {
+        /* добавляем элемент по умолчанию */
+        iterator = insert(key, tvalue{});
+    }
+
+    return iterator->second;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 tvalue &BP_tree<tkey, tvalue, compare, t>::operator[](tkey &&key) {
-    throw not_implemented("too laazyy", "your code should be here...");
+    return operator[](std::move(key));
 }
 
 // endregion element access impl
@@ -1368,21 +1378,19 @@ bool BP_tree<tkey, tvalue, compare, t>::is_node_has_more_minimum_elements(bptree
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BP_tree<tkey, tvalue, compare, t>::clear() noexcept {
-    // TODO: impl it!
+    while (!empty()) erase(begin());
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator, bool> BP_tree<tkey, tvalue, compare, t>::insert(
     const tree_data_type &data) {
-    throw not_implemented("too laazyy", "your code should be here...");
+    return emplace(data);
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator, bool> BP_tree<tkey, tvalue, compare, t>::insert(
     tree_data_type &&data) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator, bool> BP_tree<tkey, tvalue, compare, t>::insert(tree_data_type&& data)",
-        "your code should be here...");
+    return emplace(std::move(data));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1422,26 +1430,34 @@ std::pair<typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator, bool> BP_
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::insert_or_assign(
     const tree_data_type &data) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::insert_or_assign(const tree_data_type& data)",
-        "your code should be here...");
+    emplace_or_assign(data);
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::insert_or_assign(
     tree_data_type &&data) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::insert_or_assign(tree_data_type&& data)",
-        "your code should be here...");
+    emplace_or_assign(std::move(data));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 template<typename... Args>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare,
     t>::emplace_or_assign(Args &&... args) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> template <typename ...Args> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::emplace_or_assign(Args&&... args)",
-        "your code should be here...");
+    tree_data_type data(std::forward<Args>(args)...);
+
+    bptree_iterator found_key = find(data.first);
+    if (found_key != end()) {
+        /* такой ключ уже существует */
+        auto *node = found_key._node;
+        auto index = found_key._index;
+        auto node_term = dynamic_cast<bptree_node_term *>(node);
+        if (!node_term) throw std::logic_error("Node isn't a leaf!");
+
+        node_term->_data[index].second = data.second;
+        return found_key;
+    }
+
+    return insert(data).first;
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -1478,17 +1494,21 @@ typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
     bptree_iterator beg, bptree_iterator en) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(bptree_iterator beg, bptree_iterator en)",
-        "your code should be here...");
+    auto iterator = beg;
+    while (iterator != en) {
+        erase(iterator);
+        ++iterator;
+    }
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(
     bptree_const_iterator beg, bptree_const_iterator en) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BP_tree<tkey, tvalue, compare, t>::bptree_iterator BP_tree<tkey, tvalue, compare, t>::erase(bptree_const_iterator beg, bptree_const_iterator en)",
-        "your code should be here...");
+    auto iterator = beg;
+    while (iterator != en) {
+        erase(iterator);
+        ++iterator;
+    }
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
