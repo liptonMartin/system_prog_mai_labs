@@ -23,9 +23,11 @@ public:
 
 private:
 
-    // TODO: Another restrictions
-    static constexpr const size_t minimum_keys_in_node = t - 1;
-    static constexpr const size_t maximum_keys_in_node = 2 * t - 1;
+    static constexpr size_t minimum_keys_in_root = 1;
+    static constexpr size_t maximum_keys_in_root = 4 * t - 1;
+
+    static constexpr size_t minimum_keys_in_node = 2 * t - 1;
+    static constexpr size_t maximum_keys_in_node = 3 * t - 1;
 
     // region comparators declaration
 
