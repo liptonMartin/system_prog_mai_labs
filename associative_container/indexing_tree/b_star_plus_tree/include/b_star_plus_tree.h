@@ -32,12 +32,23 @@ private:
 
     inline bool compare_pairs(const tree_data_type &lhs, const tree_data_type &rhs) const;
 
+    bool less(tkey a, tkey b) { return compare::operator()(a, b); }
+    bool greater(tkey a, tkey b) { return compare::operator()(b, a); }
+    bool equal(tkey a, tkey b) { return !less(a, b) && !greater(a, b); }
+    bool not_equal(tkey a, tkey b) { return !equal(a, b); }
+    bool less_or_equal(tkey a, tkey b) { return less(a, b) || equal(a, b); }
+    bool greater_or_equal(tkey a, tkey b) { return greater(a, b) || equal(a, b); }
+
     // endregion comparators declaration
 
     struct bsptree_node_base {
         bool _is_terminated;
 
         bsptree_node_base() noexcept;
+
+        virtual size_t keys_size() = 0;
+
+        virtual boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() = 0;
 
         virtual ~bsptree_node_base() = default;
     };
@@ -47,6 +58,16 @@ private:
         boost::container::static_vector<tree_data_type, maximum_keys_in_root + 1> _data;
 
         bsptree_node_term() noexcept;
+
+        size_t keys_size() override { return _data.size(); }
+
+        boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() override {
+            auto keys = boost::container::static_vector<tkey, maximum_keys_in_node + 1>{};
+            for (auto &elem: _data) {
+                keys.push_back(elem.first);
+            }
+            return keys;
+        };
     };
 
     struct bsptree_node_middle : public bsptree_node_base {
@@ -54,6 +75,9 @@ private:
         boost::container::static_vector<bsptree_node_base *, maximum_keys_in_root + 2> _pointers;
 
         bsptree_node_middle() noexcept;
+
+        size_t keys_size() override { return _keys.size(); }
+        boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() override { return _keys; };
     };
 
     pp_allocator<value_type> _allocator;
@@ -272,6 +296,14 @@ public:
 
     // endregion modifiers declaration
 
+    // region debug functions
+
+    void print_tree();
+
+    void print_node(bsptree_node_base *node, int depth = 0);
+
+    // endregion
+
 private:
     // region helper functions
 
@@ -279,6 +311,42 @@ private:
 
     // endregion
 };
+
+
+// region debug impl
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::print_tree() {
+    if (_root) print_node(_root);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::print_node(bsptree_node_base *node, int depth) {
+    std::cout << std::string(depth, ' ');
+
+    auto keys = node->keys();
+    std::cout << '[';
+    for (int i = 0; i < node->keys_size(); ++i) {
+        std::cout << (keys[i]);
+        if (i != node->keys_size() - 1) std::cout << "|";
+    }
+    std::cout << "]\n" << std::flush;
+
+    if (auto node_middle = dynamic_cast<bsptree_node_middle *>(node)) {
+        std::cout << "(" << keys[0] << ')';
+        print_node(node_middle->_pointers[0], depth + 1);
+
+        for (int i = 0; i < node->keys_size(); ++i) {
+            if (node_middle->_pointers[i + 1]) {
+                std::cout << '(' << keys[i] << ')';
+                print_node(node_middle->_pointers[i + 1], depth + 1);
+            }
+        }
+    }
+}
+
+// endregion debug impl
+
 
 // region comparators impl
 
