@@ -1153,7 +1153,7 @@ void BP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
     else if (is_left_brother_exist(parent_index)) {
         auto left_brother = parent_middle->_pointers[parent_index - 1];
         merge(left_brother, node, parent_middle, parent_index - 1);
-        if (node->_is_terminate) {
+        if (left_brother->_is_terminate) {
             auto new_key = left_brother->keys()[0];
             update_references_in_parent(path, old_key, new_key);
         }
