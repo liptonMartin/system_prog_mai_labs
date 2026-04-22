@@ -355,7 +355,7 @@ private:
 
     bool is_left_brother_exist(size_t parent_index);
 
-    bool has_more_minimum_elements(bsptree_node_base *node);
+    bool is_node_has_maximum_elements(bsptree_node_base *node);
 
     bsptree_node_term *first_terminate_node();
 
@@ -1088,7 +1088,7 @@ void BSP_tree<tkey, tvalue, compare, t>::rebalancing_after_insert(
     /* пробуем отдать правому брату */
     if (is_right_brother_exist(parent_middle, parent_index)) {
         auto right_brother = parent_middle->_pointers[parent_index + 1];
-        if (has_more_minimum_elements(right_brother)) {
+        if (!is_node_has_maximum_elements(right_brother)) {
             /* значит можно отдать правому брату */
             if (auto right_middle = dynamic_cast<bsptree_node_middle *>(right_brother)) {
                 give_right_brother_middle(node_middle, right_middle, parent_middle, parent_index);
@@ -1103,8 +1103,8 @@ void BSP_tree<tkey, tvalue, compare, t>::rebalancing_after_insert(
 
     /* отдать правому брату не получилось, поэтому пытаемся отдать левому брату */
     if (is_left_brother_exist(parent_index)) {
-        auto left_brother = parent_middle->_pointers[parent_index + 1];
-        if (has_more_minimum_elements(left_brother)) {
+        auto left_brother = parent_middle->_pointers[parent_index - 1];
+        if (!is_node_has_maximum_elements(left_brother)) {
             /* значит можно отдать левому брату */
             if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left_brother)) {
                 give_left_brother_middle(node_middle, left_middle, parent_middle, parent_index);
@@ -1130,19 +1130,21 @@ void BSP_tree<tkey, tvalue, compare, t>::rebalancing_after_insert(
             throw std::logic_error("Right brother has unknown type!");
         }
         rebalancing_after_insert(path);
+        return;
     }
 
     /* пытаемся разделиться с левым братом */
     if (is_left_brother_exist(parent_index)) {
         auto left_brother = parent_middle->_pointers[parent_index - 1];
         if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left_brother)) {
-            split_middle(node_middle, left_middle, parent_middle, parent_index);
+            split_middle(left_middle, node_middle, parent_middle, parent_index - 1);
         } else if (auto left_term = dynamic_cast<bsptree_node_term *>(left_brother)) {
-            split_term(node_term, left_term, parent_middle, parent_index - 1);
+            split_term(left_term, node_term, parent_middle, parent_index - 1);
         } else {
             throw std::logic_error("Left brother has unknown type!");
         }
         rebalancing_after_insert(path);
+        return;
     }
     throw std::logic_error("The node hasn't brothers and it isn't a root!");
 }
@@ -1188,6 +1190,8 @@ void BSP_tree<tkey, tvalue, compare, t>::handle_rebalancing_root() {
         new_root->_pointers.push_back(_root);
         new_root->_pointers.push_back(dynamic_cast<bsptree_node_base *>(second_node));
     } else throw std::logic_error("Root has unknown type!");
+
+    _root = dynamic_cast<bsptree_node_base*>(new_root);
 }
 
 
@@ -1401,8 +1405,9 @@ void BSP_tree<tkey, tvalue, compare, t>::split_term(bsptree_node_term *left, bsp
     left->_next = middle_node;
 
     /* заполняем средний узел */
-    int i = index_split_element_left;
-    for (int _ = index_split_element_left; _ < left->_data.size(); ++_) {
+    size_t i = index_split_element_left;
+    const size_t left_size = left->_data.size();
+    for (int _ = index_split_element_left; _ < left_size; ++_) {
         /* не изменяется переменная i, потому что мы делаем erase и все элементы сдвигаются */
         auto element = left->_data[i];
         left->_data.erase(left->_data.begin() + i);
@@ -1440,8 +1445,8 @@ bool BSP_tree<tkey, tvalue, compare, t>::is_left_brother_exist(size_t parent_ind
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
-bool BSP_tree<tkey, tvalue, compare, t>::has_more_minimum_elements(bsptree_node_base *node) {
-    return node->keys_size() > minimum_keys_in_node;
+bool BSP_tree<tkey, tvalue, compare, t>::is_node_has_maximum_elements(bsptree_node_base *node) {
+    return node->keys_size() >= maximum_keys_in_node;
 }
 
 
