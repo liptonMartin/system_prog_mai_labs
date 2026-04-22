@@ -48,7 +48,7 @@ private:
 
         virtual size_t keys_size() = 0;
 
-        virtual boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() = 0;
+        virtual boost::container::static_vector<tkey, maximum_keys_in_root + 1> keys() = 0;
 
         virtual ~bsptree_node_base() = default;
     };
@@ -61,8 +61,8 @@ private:
 
         size_t keys_size() override { return _data.size(); }
 
-        boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() override {
-            auto keys = boost::container::static_vector<tkey, maximum_keys_in_node + 1>{};
+        boost::container::static_vector<tkey, maximum_keys_in_root + 1> keys() override {
+            auto keys = boost::container::static_vector<tkey, maximum_keys_in_root + 1>{};
             for (auto &elem: _data) {
                 keys.push_back(elem.first);
             }
@@ -77,7 +77,7 @@ private:
         bsptree_node_middle() noexcept;
 
         size_t keys_size() override { return _keys.size(); }
-        boost::container::static_vector<tkey, maximum_keys_in_node + 1> keys() override { return _keys; };
+        boost::container::static_vector<tkey, maximum_keys_in_root + 1> keys() override { return _keys; };
     };
 
     pp_allocator<value_type> _allocator;
@@ -307,7 +307,58 @@ public:
 private:
     // region helper functions
 
+    class path_position {
+        std::vector<std::pair<bsptree_node_base *, size_t> > _path;
+        size_t _index;
+
+    public:
+        path_position(
+            std::vector<std::pair<bsptree_node_base *, size_t> > path = std::vector<std::pair<bsptree_node_base *,
+                size_t> >{}, size_t index = 0);
+
+        std::vector<std::pair<bsptree_node_base *, size_t> > &get_path();
+
+        bsptree_node_base *get_last_node();
+
+        size_t get_index();
+
+        void set_index(size_t index);
+    };
+
+    friend class path_position;
+
+    path_position search_terminate_node(tkey key);
+
+    void rebalancing_after_insert(std::vector<std::pair<bsptree_node_base *, size_t> > &path);
+
+    void handle_rebalancing_root();
+
+    void give_right_brother_middle(bsptree_node_middle *node, bsptree_node_middle *right, bsptree_node_middle *parent,
+                                   size_t parent_index);
+
+    void give_right_brother_term(bsptree_node_term *node, bsptree_node_term *right, bsptree_node_middle *parent,
+                                 size_t parent_index);
+
+    void give_left_brother_middle(bsptree_node_middle *node, bsptree_node_middle *left, bsptree_node_middle *parent,
+                                  size_t parent_index);
+
+    void give_left_brother_term(bsptree_node_term *node, bsptree_node_term *left, bsptree_node_middle *parent,
+                                size_t parent_index);
+
+    void split_middle(bsptree_node_middle *left, bsptree_node_middle *right, bsptree_node_middle *parent,
+                      size_t parent_index);
+
+    void split_term(bsptree_node_term *left, bsptree_node_term *right, bsptree_node_middle *parent,
+                    size_t parent_index);
+
+    bool is_right_brother_exist(bsptree_node_middle *parent, size_t parent_index);
+
+    bool is_left_brother_exist(size_t parent_index);
+
+    bool has_more_minimum_elements(bsptree_node_base *node);
+
     bsptree_node_term *first_terminate_node();
+
 
     // endregion
 };
@@ -383,14 +434,14 @@ BSP_tree<tkey, tvalue, compare, t>::bsptree_node_base::bsptree_node_base() noexc
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BSP_tree<tkey, tvalue, compare, t>::bsptree_node_term::bsptree_node_term() noexcept {
-    this->_is_terminate = true;
+    this->_is_terminated = true;
     _next = nullptr;
     _data = boost::container::static_vector<tree_data_type, maximum_keys_in_node + 1>{};
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BSP_tree<tkey, tvalue, compare, t>::bsptree_node_middle::bsptree_node_middle() noexcept {
-    this->_is_terminate = false;
+    this->_is_terminated = false;
     _keys = boost::container::static_vector<tkey, maximum_keys_in_node + 1>{};
     _pointers = boost::container::static_vector<bsptree_node_base *, maximum_keys_in_node + 2>{};
 }
@@ -459,7 +510,7 @@ BSP_tree<tkey, tvalue, compare, t>::BSP_tree(BSP_tree &&other) noexcept
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 BSP_tree<tkey, tvalue, compare, t> &BSP_tree<tkey, tvalue, compare, t>::operator=(const BSP_tree &other) {
     if (this != &other) {
-        auto tmp = BP_tree(other);
+        auto tmp = BSP_tree(other);
         clear();
         *this = tmp;
     }
@@ -737,12 +788,12 @@ typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tva
         }
 
         /* такой ключ существует в листе */
-        if (node->_is_terminate && equal(keys[l], key))
+        if (node->_is_terminated && equal(keys[l], key))
             return bsptree_iterator(
                 dynamic_cast<bsptree_node_term *>(node), l);
 
         /* мы уже в листовых узлах или нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
-        if (!(node->_is_terminate || less(key, keys[l]))) ++l;
+        if (!(node->_is_terminated || less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bsptree_node_middle *>(node);
         if (middle_node != nullptr) node = middle_node->_pointers[l];
@@ -755,7 +806,7 @@ typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tva
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_const_iterator BSP_tree<tkey, tvalue, compare, t>::find(
     const tkey &key) const {
-    return bptree_const_iterator(const_cast<BSP_tree *>(this)->find(key));
+    return bsptree_const_iterator(const_cast<BSP_tree *>(this)->find(key));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -783,12 +834,12 @@ typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tva
         }
 
         /* такой ключ существует в листе */
-        if (node->_is_terminate && equal(keys[l], key))
+        if (node->_is_terminated && equal(keys[l], key))
             return bsptree_iterator(
                 dynamic_cast<bsptree_node_term *>(node), l);
 
         /* уже дошли до листового узла или нужно перейти в самого левого ребенка, значит l увеличивать не нужно */
-        if (!(node->_is_terminate || less(key, keys[l]))) ++l;
+        if (!(node->_is_terminated || less(key, keys[l]))) ++l;
 
         auto middle_node = dynamic_cast<bsptree_node_middle *>(node);
         if (middle_node != nullptr) {
@@ -837,7 +888,7 @@ bool BSP_tree<tkey, tvalue, compare, t>::contains(const tkey &key) const {
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BSP_tree<tkey, tvalue, compare, t>::clear() noexcept {
-    while (!empty()) erase(begin());
+    // TODO: while (!empty()) erase(begin());
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -860,9 +911,34 @@ template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t
 template<typename... Args>
 std::pair<typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator, bool> BSP_tree<tkey, tvalue, compare,
     t>::emplace(Args &&... args) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> template<typename ...Args> std::pair<typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator, bool> BSP_tree<tkey, tvalue, compare, t>::emplace(Args&&... args)",
-        "your code should be here...");
+    tree_data_type data(std::forward<Args>(args)...);
+
+    if (contains(data.first)) return {end(), false};
+
+    auto path_to_root = search_terminate_node(data.first);
+
+    auto *last_node = path_to_root.get_last_node();
+    auto index = path_to_root.get_index();
+    auto &path = path_to_root.get_path();
+
+    if (last_node == nullptr) {
+        /* дерево пустое */
+        auto new_root = get_allocator().template new_object<bsptree_node_term>();
+        new_root->_data.push_back(data);
+        _root = new_root;
+        path.emplace_back(new_root, 0);
+    } else {
+        auto terminate_node = dynamic_cast<bsptree_node_term *>(last_node);
+        if (terminate_node == nullptr) {
+            const std::string message = std::format("The node(first key = {}) isn't a leaf!", data.first);
+            throw std::logic_error(message);
+        }
+        terminate_node->_data.insert(terminate_node->_data.begin() + index, data);
+    }
+
+    rebalancing_after_insert(path);
+    ++_size;
+    return {find(data.first), true};
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
@@ -934,6 +1010,441 @@ typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tva
 
 // region helper functions
 
+
+/**
+ * Обертка над lower_bound, которая возвращает путь до узла.
+ * В случае, если дерево пустое, то оно не создает новый узел
+ * @param key Ключ, по которому производится поиск
+ * @return Путь от корня до узла
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+BSP_tree<tkey, tvalue, compare, t>::path_position BSP_tree<tkey, tvalue, compare, t>::search_terminate_node(tkey key) {
+    if (_root == nullptr) return path_position();
+
+    auto *node = _root;
+    size_t index = 0;
+    std::vector<std::pair<bsptree_node_base *, size_t> > path{};
+    path.emplace_back(_root, 0);
+    tkey less_or_equal_key = node->keys()[index]; /* будем хранить последний ключ, который мы посетили */
+
+    while (node) {
+        auto keys = node->keys();
+        /* бинарный поиск по ключам */
+        size_t l = 0;
+        size_t r = keys.size();
+        while (l + 1 < r) {
+            size_t m = (l + r) / 2;
+
+            if (less_or_equal(keys[m], key)) {
+                /* keys[m] <= key */
+                l = m;
+            } else {
+                r = m;
+            }
+        }
+
+        less_or_equal_key = keys[l];
+
+        /* нужно перейти в самого левого ребенка или дошли до конца, значит l увеличивать не нужно */
+        if (!(node->_is_terminated || less(key, keys[l]))) ++l;
+
+        auto middle_node = dynamic_cast<bsptree_node_middle *>(node);
+        if (middle_node != nullptr) {
+            node = middle_node->_pointers[l];
+            path.emplace_back(middle_node->_pointers[l], l);
+        } else node = nullptr;
+        index = l;
+    }
+
+    /* в случае (index == 0 && key < less_or_equal_key) мы уже находимся на элементе, который больше нашего */
+    if (less_or_equal_key == key || (index == 0 && less(key, less_or_equal_key))) return path_position(path, index);
+    /* в случае, если мы находимся на последнем элементе, то как раз ++index будет указывать на последний (еще несуществующий) элемент*/
+    return path_position(path, ++index);
+}
+
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::rebalancing_after_insert(
+    std::vector<std::pair<bsptree_node_base *, size_t> > &path) {
+    auto [node, parent_index] = path.back();
+    path.pop_back();
+
+    if (node->keys_size() <= maximum_keys_in_node) return; /* балансировка точно не нужна */
+
+    if (node == _root && node->keys_size() <= maximum_keys_in_root) return; /* балансировка точно не нужна */
+    if (node == _root) {
+        /* балансировка нужна корню */
+        handle_rebalancing_root();
+        return;
+    }
+
+    auto [parent, parent_parent_index] = path.back();
+    auto parent_middle = dynamic_cast<bsptree_node_middle *>(parent);
+    if (!parent_middle) throw std::logic_error("Parent isn't a middle node!");
+
+    auto node_term = dynamic_cast<bsptree_node_term *>(node);
+    auto node_middle = dynamic_cast<bsptree_node_middle *>(node);
+
+    /* пробуем отдать правому брату */
+    if (is_right_brother_exist(parent_middle, parent_index)) {
+        auto right_brother = parent_middle->_pointers[parent_index + 1];
+        if (has_more_minimum_elements(right_brother)) {
+            /* значит можно отдать правому брату */
+            if (auto right_middle = dynamic_cast<bsptree_node_middle *>(right_brother)) {
+                give_right_brother_middle(node_middle, right_middle, parent_middle, parent_index);
+            } else if (auto right_term = dynamic_cast<bsptree_node_term *>(right_brother)) {
+                give_right_brother_term(node_term, right_term, parent_middle, parent_index);
+            } else {
+                throw std::logic_error("Right brother has unknown type!");
+            }
+            return; /* балансировка закончилась */
+        }
+    }
+
+    /* отдать правому брату не получилось, поэтому пытаемся отдать левому брату */
+    if (is_left_brother_exist(parent_index)) {
+        auto left_brother = parent_middle->_pointers[parent_index + 1];
+        if (has_more_minimum_elements(left_brother)) {
+            /* значит можно отдать левому брату */
+            if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left_brother)) {
+                give_left_brother_middle(node_middle, left_middle, parent_middle, parent_index);
+            } else if (auto left_term = dynamic_cast<bsptree_node_term *>(left_brother)) {
+                give_left_brother_term(node_term, left_term, parent_middle, parent_index);
+            } else {
+                throw std::logic_error("Left brother has unknown type!");
+            }
+
+            return; /* балансировка закончилась */
+        }
+    }
+
+    /* отдать братьям не получилось, пытаемся разделить два соседних узла в три */
+    /* пытаемся разделиться с правым братом */
+    if (is_right_brother_exist(parent_middle, parent_index)) {
+        auto right_brother = parent_middle->_pointers[parent_index + 1];
+        if (auto right_middle = dynamic_cast<bsptree_node_middle *>(right_brother)) {
+            split_middle(node_middle, right_middle, parent_middle, parent_index);
+        } else if (auto right_term = dynamic_cast<bsptree_node_term *>(right_brother)) {
+            split_term(node_term, right_term, parent_middle, parent_index);
+        } else {
+            throw std::logic_error("Right brother has unknown type!");
+        }
+        rebalancing_after_insert(path);
+    }
+
+    /* пытаемся разделиться с левым братом */
+    if (is_left_brother_exist(parent_index)) {
+        auto left_brother = parent_middle->_pointers[parent_index - 1];
+        if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left_brother)) {
+            split_middle(node_middle, left_middle, parent_middle, parent_index);
+        } else if (auto left_term = dynamic_cast<bsptree_node_term *>(left_brother)) {
+            split_term(node_term, left_term, parent_middle, parent_index - 1);
+        } else {
+            throw std::logic_error("Left brother has unknown type!");
+        }
+        rebalancing_after_insert(path);
+    }
+    throw std::logic_error("The node hasn't brothers and it isn't a root!");
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::handle_rebalancing_root() {
+    /* новый корень будет обязательно middle элементом */
+    auto new_root = get_allocator().template new_object<bsptree_node_middle>();
+
+    auto index_middle_element = _root->keys_size() / 2;
+    auto middle_element = _root->keys()[index_middle_element];
+
+    /* заполняем новый корень */
+    new_root->_keys.push_back(middle_element);
+
+    if (auto old_root_term = dynamic_cast<bsptree_node_term *>(_root)) {
+        auto second_node = get_allocator().template new_object<bsptree_node_term>();
+
+        /* добавляем со средним элементом */
+        second_node->_data.insert(second_node->_data.begin(), old_root_term->_data.begin() + index_middle_element,
+                                  old_root_term->_data.end());
+        old_root_term->_data.erase(old_root_term->_data.begin() + index_middle_element, old_root_term->_data.end());
+
+        new_root->_pointers.push_back(_root);
+        new_root->_pointers.push_back(dynamic_cast<bsptree_node_base *>(second_node));
+    } else if (auto old_root_middle = dynamic_cast<bsptree_node_middle *>(_root)) {
+        auto second_node = get_allocator().template new_object<bsptree_node_middle>();
+
+
+        second_node->_keys.insert(second_node->_keys.begin(), old_root_middle->_keys.begin() + index_middle_element + 1,
+                                  old_root_middle->_keys.end());
+        /* удаляем еще и средний элемент */
+        old_root_middle->_keys.erase(old_root_middle->_keys.begin() + index_middle_element,
+                                     old_root_middle->_keys.end());
+
+
+        second_node->_pointers.insert(second_node->_pointers.begin(),
+                                      old_root_middle->_pointers.begin() + index_middle_element + 1,
+                                      old_root_middle->_pointers.end());
+        old_root_middle->_pointers.erase(old_root_middle->_pointers.begin() + index_middle_element + 1,
+                                         old_root_middle->_pointers.end());
+
+        new_root->_pointers.push_back(_root);
+        new_root->_pointers.push_back(dynamic_cast<bsptree_node_base *>(second_node));
+    } else throw std::logic_error("Root has unknown type!");
+}
+
+
+/**
+ * Функция забирает последний элемент из node, отдать правому брату, при этому мы находимся во внутренних узлах
+ * @param node Узел, откуда надо забрать последний элемент и отдать правому брату
+ * @param right Правый брат
+ * @param parent Родитель
+ * @param parent_index Индекс сына в родителе, откуда мы попали в node
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::give_right_brother_middle(bsptree_node_middle *node,
+                                                                   bsptree_node_middle *right,
+                                                                   bsptree_node_middle *parent,
+                                                                   size_t parent_index) {
+    auto last_element_node = node->_keys.back();
+    node->_keys.pop_back();
+
+    auto element_from_parent = parent->_keys[parent_index];
+    parent->_keys[parent_index] = last_element_node;
+
+    right->_keys.insert(right->_keys.begin(), element_from_parent);
+
+    auto last_child_node = node->_pointers.back();
+    node->_pointers.pop_back();
+
+    right->_pointers.insert(right->_pointers.begin(), last_child_node);
+}
+
+/**
+ * Функция забирает последний элемент из node, отдать правому брату, при этому мы находимся в листах
+ * Ключевая особенность в том, что запоминать элемент с родителя не нужно, ведь он совпадает с первым элементом
+ * в правом брате! Поэтому просто обновляем его
+ * @param node Узел, откуда надо забрать последний элемент и отдать правому брату
+ * @param right Правый брат
+ * @param parent Родитель
+ * @param parent_index Индекс сына в родителе, откуда мы попали в node
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::give_right_brother_term(bsptree_node_term *node, bsptree_node_term *right,
+                                                                 bsptree_node_middle *parent,
+                                                                 size_t parent_index) {
+    auto last_element_node = node->_data.back();
+    node->_data.pop_back();
+
+    parent->_keys[parent_index] = last_element_node.first;
+
+    right->_data.insert(right->_data.begin(), last_element_node);
+}
+
+/**
+ * Функция забирает первый элемент из node, отдает левому брату в самый последний элемент,
+ * при этом мы находимся во внутренних узлах
+ * @param node Узел, откуда надо забрать первый элемент и отдать левому брату
+ * @param left Левый брат
+ * @param parent Родитель
+ * @param parent_index Индекс сына в родителе, откуда мы попали в node
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::give_left_brother_middle(bsptree_node_middle *node, bsptree_node_middle *left,
+                                                                  bsptree_node_middle *parent,
+                                                                  size_t parent_index) {
+    auto first_element_node = node->_keys.front();
+    node->_keys.erase(node->_keys.begin());
+
+    auto element_from_parent = parent->_keys[parent_index - 1];
+    parent->_keys[parent_index - 1] = first_element_node;
+
+    left->_keys.push_back(element_from_parent);
+
+    auto first_child_node = node->_pointers.front();
+    node->_pointers.erase(node->_pointers.begin());
+
+    left->_pointers.push_back(first_child_node);
+}
+
+/**
+ * Функция забирает первый элемент из node, отдает левому брату в самый последний элемент,
+ * при этом мы находимся во листах. Ключевая особенность в том, что мы добавляем в родителя именно второй элемент
+ * из node, потому что в родителе не хранится сам элемент, а только фиктивный ключ!
+ * @param node Узел, откуда надо забрать первый элемент и отдать левому брату
+ * @param left Левый брат
+ * @param parent Родитель
+ * @param parent_index Индекс сына в родителе, откуда мы попали в node
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::give_left_brother_term(bsptree_node_term *node, bsptree_node_term *left,
+                                                                bsptree_node_middle *parent,
+                                                                size_t parent_index) {
+    auto first_element_node = node->_data.front();
+    node->_data.erase(node->_data.begin());
+
+    auto second_element_node = node->_data.front();
+
+    parent->_keys[parent_index - 1] = second_element_node.first; /* Обновляем именно на второй элемент! */
+
+    left->_data.push_back(first_element_node);
+}
+
+/**
+ * Разделяет два узла left и right на три узла left, middle, right
+ *
+ * @param left Узел, который находится слева
+ * @param right Узел, который находится справа
+ * @param parent Узел-родитель
+ * @param parent_index Индекс сына в родителе, который указывает на left
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::split_middle(bsptree_node_middle *left, bsptree_node_middle *right,
+                                                      bsptree_node_middle *parent,
+                                                      size_t parent_index) {
+    auto parent_split_element = parent->_keys[parent_index];
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+
+    constexpr auto index_split_element_left = 2 * t; /* элемент разделитель с первого узла */
+    auto first_element_to_add_parent = left->_keys[index_split_element_left];
+
+    /*
+     * в случае, если переполнен левый узел, то тогда правый разделитель имеет индекс t - 1
+     * в случае, если переполнен правый узел, то тогда правый разделитель имеет индекс t
+     */
+    auto index_split_element_right = t; /* элемент разделитель со второго узла */
+    if (left->_keys.size() >= maximum_keys_in_node + 1) index_split_element_right = t - 1;
+
+    auto second_element_to_add_parent = right->_keys[index_split_element_right];
+
+    /* удаляем после всего, чтобы не нарушилась проверка на индекс правого элемента */
+    left->_keys.erase(left->_keys.begin() + index_split_element_left);
+    right->_keys.erase(right->_keys.begin() + index_split_element_right);
+
+    auto middle_node = get_allocator().template new_object<bsptree_node_middle>();
+
+    /* заполняем средний узел */
+    int i = index_split_element_left;
+    for (int _ = index_split_element_left; _ < left->_keys.size(); ++_) {
+        /* не изменяется переменная i, потому что мы делаем erase и все элементы сдвигаются */
+        auto element = left->_keys[i];
+        left->_keys.erase(left->_keys.begin() + i);
+        middle_node->_keys.push_back(element);
+
+        auto child = left->_pointers.back();
+        middle_node->_pointers.insert(middle_node->_pointers.begin(), child);
+        left->_pointers.pop_back();
+    }
+    /* добавляем последнего ребенка узла в средний узел, если он есть */
+    if (!left->_pointers.empty()) {
+        auto child = left->_pointers.back();
+        middle_node->_pointers.insert(middle_node->_pointers.begin(), child);
+        left->_pointers.pop_back();
+    }
+
+    /* добавляем родительский узел */
+    middle_node->_keys.push_back(parent_split_element);
+
+    /* добавляем первого ребенка брата в средний узел, если он есть */
+    if (!right->_pointers.empty()) {
+        auto child = right->_pointers.front();
+        middle_node->_pointers.push_back(child);
+        right->_pointers.erase(right->_pointers.begin());
+    }
+    i = 0;
+    for (int _ = 0; _ < index_split_element_right; ++_) {
+        /* аналогично как и выше, переменная i не изменяется, потому что мы выполняем erase и элементы сдвигаются */
+        auto element = right->_keys[i];
+        right->_keys.erase(right->_keys.begin() + i);
+        middle_node->_keys.push_back(element);
+
+        if (!right->_pointers.empty()) {
+            auto child = right->_pointers.front();
+            middle_node->_pointers.push_back(child);
+            right->_pointers.erase(right->_pointers.begin());
+        }
+    }
+
+    /* заполняем родителя */
+    parent->_keys.insert(parent->_keys.begin() + parent_index, first_element_to_add_parent);
+    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, second_element_to_add_parent);
+
+    /* распределяем детей */
+    parent->_pointers.insert(parent->_pointers.begin() + parent_index + 1, middle_node);
+}
+
+/**
+ * Разъединяет два узла в три, причем мы находимся в листах.
+ * Логика разделения: всего у нас 6t - 1 элементов (3t|3t - 1 или 3t-1|3t).
+ * Значит делаем так:  * 2t|2t|2t-1 - в сумме 6t - 1 элемент.
+ * Тогда если переполнен левый узел, то индексы:
+ * left_index = 2t, right_index = t
+ * Тогда если переполнен правый узел, то индексы:
+ * left_index = 2t, right_index = t + 1
+ *
+ * @param left Левый узел
+ * @param right Правый узел
+ * @param parent Родитель
+ * @param parent_index Индекс сына в родителя, который указывает на left
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::split_term(bsptree_node_term *left, bsptree_node_term *right,
+                                                    bsptree_node_middle *parent,
+                                                    size_t parent_index) {
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+
+    constexpr auto index_split_element_left = 2 * t; /* элемент разделитель с первого узла */
+
+    auto index_split_element_right = t; /* элемент разделитель со второго узла */
+    if (right->_data.size() >= maximum_keys_in_node + 1) index_split_element_right = t + 1;
+
+    auto middle_node = get_allocator().template new_object<bsptree_node_term>();
+    /* изменяем указатель на next */
+    middle_node->_next = right;
+    left->_next = middle_node;
+
+    /* заполняем средний узел */
+    int i = index_split_element_left;
+    for (int _ = index_split_element_left; _ < left->_data.size(); ++_) {
+        /* не изменяется переменная i, потому что мы делаем erase и все элементы сдвигаются */
+        auto element = left->_data[i];
+        left->_data.erase(left->_data.begin() + i);
+        middle_node->_data.push_back(element);
+    }
+
+    i = 0;
+    for (int _ = 0; _ < index_split_element_right; ++_) {
+        /* аналогично как и выше, переменная i не изменяется, потому что мы выполняем erase и элементы сдвигаются */
+        auto element = right->_data[i];
+        right->_data.erase(right->_data.begin() + i);
+        middle_node->_data.push_back(element);
+    }
+
+    /* заполняем родителя */
+    auto first_element_to_add_parent = middle_node->_data.front().first; /* ключ */
+    auto second_element_to_add_parent = right->_data.front().first; /*  ключ */
+
+    parent->_keys.insert(parent->_keys.begin() + parent_index, first_element_to_add_parent);
+    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, second_element_to_add_parent);
+
+    /* добавляем нового ребенка */
+    parent->_pointers.insert(parent->_pointers.begin() + parent_index + 1, middle_node);
+}
+
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+bool BSP_tree<tkey, tvalue, compare, t>::is_right_brother_exist(bsptree_node_middle *parent, size_t parent_index) {
+    return parent_index + 1 < parent->_pointers.size();
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+bool BSP_tree<tkey, tvalue, compare, t>::is_left_brother_exist(size_t parent_index) {
+    return parent_index != 0;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+bool BSP_tree<tkey, tvalue, compare, t>::has_more_minimum_elements(bsptree_node_base *node) {
+    return node->keys_size() > minimum_keys_in_node;
+}
+
+
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_node_term *BSP_tree<tkey, tvalue, compare,
     t>::first_terminate_node() {
@@ -942,6 +1453,44 @@ typename BSP_tree<tkey, tvalue, compare, t>::bsptree_node_term *BSP_tree<tkey, t
         node = node_middle->_pointers[0];
     }
     return dynamic_cast<bsptree_node_term *>(node);
+}
+
+// endregion
+
+// region path_position impl
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+BSP_tree<tkey, tvalue, compare, t>::path_position::path_position(
+    std::vector<std::pair<bsptree_node_base *, size_t> > path,
+    size_t index)
+    : _path(path), _index(index) {
+}
+
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+std::vector<std::pair<typename BSP_tree<tkey, tvalue, compare, t>::bsptree_node_base *, size_t> > &BSP_tree<tkey, tvalue
+    ,
+    compare,
+    t>::path_position::get_path() {
+    return _path;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+BSP_tree<tkey, tvalue, compare, t>::bsptree_node_base *BSP_tree<tkey, tvalue, compare,
+    t>::path_position::get_last_node() {
+    if (_path.empty()) return nullptr;
+    auto [node, _] = _path.back();
+    return node;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+size_t BSP_tree<tkey, tvalue, compare, t>::path_position::get_index() {
+    return _index;
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::path_position::set_index(size_t index) {
+    _index = index;
 }
 
 // endregion
