@@ -1852,7 +1852,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_middle(bsptree_node_m
 
     /* удаляем элемент из правого брата и добавляем в родителя */
     element = right->_keys.front();
-    right->_keys.erase(right->keys().begin());
+    right->_keys.erase(right->_keys.begin());
     parent->_keys.insert(parent->_keys.begin() + parent_index, element);
 
     /* не забываем перенести ребенка */
