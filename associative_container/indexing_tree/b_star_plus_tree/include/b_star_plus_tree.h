@@ -329,6 +329,8 @@ private:
 
     path_position search_terminate_node(tkey key);
 
+    // region helper functions for emplace declaration
+
     void rebalancing_after_insert(std::vector<std::pair<bsptree_node_base *, size_t> > &path);
 
     void handle_rebalancing_root();
@@ -356,6 +358,56 @@ private:
     bool is_left_brother_exist(size_t parent_index);
 
     bool is_node_has_maximum_elements(bsptree_node_base *node);
+
+    // end region helper functions for emplace declaration
+
+    // region helper functions for erase declaration
+
+    void rebalancing_after_erase(std::vector<std::pair<bsptree_node_base *, size_t> > &path, tkey &deleted_key);
+
+    void handle_rebalancing_from_empty_root();
+
+    void merge_with_root();
+
+    void update_references_in_parent(std::vector<std::pair<bsptree_node_base *, size_t> > &path, tkey &deleted_key,
+                                     tkey new_key);
+
+    void borrow_from_right_middle(bsptree_node_middle *node, bsptree_node_middle *right,
+                                  bsptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_right_term(bsptree_node_term *node, bsptree_node_term *right,
+                                bsptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_right_right_middle(bsptree_node_middle *node, bsptree_node_middle *right,
+                                        bsptree_node_middle *right_right,
+                                        bsptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_right_right_term(bsptree_node_term *node, bsptree_node_term *right, bsptree_node_term *right_right,
+                                      bsptree_node_middle *parent, size_t parent_index);
+
+
+    void borrow_from_left_middle(bsptree_node_middle *node, bsptree_node_middle *left,
+                                 bsptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_left_term(bsptree_node_term *node, bsptree_node_term *left,
+                               bsptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_left_left_middle(bsptree_node_middle *node, bsptree_node_middle *left,
+                                      bsptree_node_middle *left_left,
+                                      bsptree_node_middle *parent, size_t parent_index);
+
+    void borrow_from_left_left_term(bsptree_node_term *node, bsptree_node_term *left, bsptree_node_term *left_left,
+                                    bsptree_node_middle *parent, size_t parent_index);
+
+    void merge_middle(bsptree_node_middle *left, bsptree_node_middle *node, bsptree_node_middle *right,
+                      bsptree_node_middle *parent, size_t parent_index);
+
+    void merge_term(bsptree_node_term *left, bsptree_node_term *node, bsptree_node_term *right,
+                    bsptree_node_middle *parent, size_t parent_index);
+
+    bool is_node_has_more_minimum_keys(bsptree_node_base *node);
+
+    // endregion helper functions for erase declaration
 
     bsptree_node_term *first_terminate_node();
 
@@ -969,47 +1021,65 @@ typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tva
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(
     bsptree_iterator pos) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(bsptree_iterator pos)",
-        "your code should be here...");
+    return erase(bsptree_const_iterator(pos));
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(
     bsptree_const_iterator pos) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(bsptree_const_iterator pos)",
-        "your code should be here...");
+    if (pos == end()) return end();
+
+    auto key = pos->first;
+    auto path_to_root = search_terminate_node(key);
+
+    auto *last_node = path_to_root.get_last_node();
+    auto index = path_to_root.get_index();
+    auto &path = path_to_root.get_path();
+
+    auto last_node_term = dynamic_cast<bsptree_node_term *>(last_node);
+    if (last_node_term == nullptr) {
+        std::string message = std::format("Attempt to erase node(first key = {}) is not a leaf!", last_node->keys()[0]);
+        throw std::logic_error(message);
+    }
+
+    auto deleted_element = last_node_term->_data[index];
+    last_node_term->_data.erase(last_node_term->_data.begin() + index);
+    rebalancing_after_erase(path, deleted_element.first);
+    --_size;
+    return upper_bound(key); /* следующий элемент после удаленного */
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(
     bsptree_iterator beg, bsptree_iterator en) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(bsptree_iterator beg, bsptree_iterator en)",
-        "your code should be here...");
+    auto iterator = beg;
+    while (iterator != en) {
+        erase(iterator);
+        ++iterator;
+    }
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(
     bsptree_const_iterator beg, bsptree_const_iterator en) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(bsptree_const_iterator beg, bsptree_const_iterator en)",
-        "your code should be here...");
+    auto iterator = beg;
+    while (iterator != en) {
+        erase(iterator);
+        ++iterator;
+    }
 }
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare,
     t>::erase(const tkey &key) {
-    throw not_implemented(
-        "template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t> typename BSP_tree<tkey, tvalue, compare, t>::bsptree_iterator BSP_tree<tkey, tvalue, compare, t>::erase(const tkey& key)",
-        "your code should be here...");
+    return erase(find(key));
 }
 
 // endregion BSP_tree modifiers implementations
 
 // region helper functions
 
+// region helper functions for emplace impl
 
 /**
  * Обертка над lower_bound, которая возвращает путь до узла.
@@ -1191,7 +1261,7 @@ void BSP_tree<tkey, tvalue, compare, t>::handle_rebalancing_root() {
         new_root->_pointers.push_back(dynamic_cast<bsptree_node_base *>(second_node));
     } else throw std::logic_error("Root has unknown type!");
 
-    _root = dynamic_cast<bsptree_node_base*>(new_root);
+    _root = dynamic_cast<bsptree_node_base *>(new_root);
 }
 
 
@@ -1448,6 +1518,568 @@ template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t
 bool BSP_tree<tkey, tvalue, compare, t>::is_node_has_maximum_elements(bsptree_node_base *node) {
     return node->keys_size() >= maximum_keys_in_node;
 }
+
+// endregion helper functions for emplace impl
+
+// region helper functions for erase impl
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
+    std::vector<std::pair<bsptree_node_base *, size_t> > &path, tkey &deleted_key) {
+    auto [node, parent_index] = path.back();
+    path.pop_back();
+
+    if (path.empty()) {
+        if (node == _root) {
+            if (node->keys_size() == 0) {
+                handle_rebalancing_from_empty_root();
+            }
+            return;
+        }
+        throw std::logic_error("Rebalancing from node without parent and it isn't root!");
+    }
+
+    if (node->keys_size() >= minimum_keys_in_node) {
+        if (node->_is_terminated) {
+            auto new_key = node->keys()[0];
+            update_references_in_parent(path, deleted_key, new_key);
+        }
+        return;
+    }
+
+    auto [parent, parent_parent_index] = path.back();
+    auto parent_middle = dynamic_cast<bsptree_node_middle *>(parent);
+    if (!parent_middle) throw std::logic_error("Parent node is not middle node!");
+
+    auto node_term = dynamic_cast<bsptree_node_term *>(node);
+    auto node_middle = dynamic_cast<bsptree_node_middle *>(node);
+
+    /* пробуем занять у правого брата */
+    if (is_right_brother_exist(parent_middle, parent_index)) {
+        auto right_brother = parent_middle->_pointers[parent_index + 1];
+        if (is_node_has_more_minimum_keys(right_brother)) {
+            /* можно занять у правого брата */
+            if (auto right_middle = dynamic_cast<bsptree_node_middle *>(right_brother)) {
+                borrow_from_right_middle(node_middle, right_middle, parent_middle, parent_index);
+                return;
+            }
+            if (auto right_term = dynamic_cast<bsptree_node_term *>(right_brother)) {
+                borrow_from_right_term(node_term, right_term, parent_middle, parent_index);
+                auto new_key = node_term->_data[0].first;
+                update_references_in_parent(path, deleted_key, new_key);
+                return;
+            }
+            throw std::logic_error("Right brother has unknown type!");
+        }
+
+        /* пробуем занять у правого двоюродного брата */
+        if (is_right_brother_exist(parent_middle, parent_index + 1)) {
+            auto right_right_brother = parent_middle->_pointers[parent_index + 1 + 1];
+            if (is_node_has_more_minimum_keys(right_right_brother)) {
+                /* можно занять у правого двоюродного брата */
+                if (auto right_right_middle = dynamic_cast<bsptree_node_middle *>(right_right_brother), right_middle =
+                                    dynamic_cast<bsptree_node_middle *>(right_brother);
+                    right_right_middle && right_middle) {
+                    borrow_from_right_right_middle(node_middle, right_middle, right_right_middle, parent_middle,
+                                                   parent_index);
+                    return;
+                }
+                if (auto right_right_term = dynamic_cast<bsptree_node_term *>(right_right_brother), right_term =
+                                    dynamic_cast<bsptree_node_term *>(right_brother); right_right_term && right_term) {
+                    borrow_from_right_right_term(node_term, right_term, right_right_term, parent_middle, parent_index);
+                    auto new_key = node_term->_data[0].first;
+                    update_references_in_parent(path, deleted_key, new_key);
+                    return;
+                }
+                throw std::logic_error("Right brother and right right brother have different types!");
+            }
+        }
+    }
+
+    /* пробуем занять у левого брата */
+    if (is_left_brother_exist(parent_index)) {
+        auto left_brother = parent_middle->_pointers[parent_index - 1];
+        if (is_node_has_more_minimum_keys(left_brother)) {
+            /* можно занять у левого брата */
+            if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left_brother)) {
+                borrow_from_left_middle(node_middle, left_middle, parent_middle, parent_index);
+                return;
+            }
+            if (auto left_term = dynamic_cast<bsptree_node_term *>(left_brother)) {
+                borrow_from_left_term(node_term, left_term, parent_middle, parent_index);
+                auto new_key = node_term->_data[0].first;
+                update_references_in_parent(path, deleted_key, new_key);
+                return;
+            }
+            throw std::logic_error("Right brother has unknown type!");
+        }
+
+        /* пробуем занять у левого двоюродного брата */
+        if (is_left_brother_exist(parent_index - 1)) {
+            auto left_left_brother = parent_middle->_pointers[parent_index - 1 - 1];
+            if (is_node_has_more_minimum_keys(left_left_brother)) {
+                /* можно занять у левого двоюродного брата */
+                if (auto left_left_middle = dynamic_cast<bsptree_node_middle *>(left_left_brother), left_middle =
+                                    dynamic_cast<bsptree_node_middle *>(left_brother);
+                    left_left_middle && left_middle) {
+                    borrow_from_left_left_middle(node_middle, left_middle, left_left_middle, parent_middle,
+                                                 parent_index);
+                    return;
+                }
+                if (auto left_left_term = dynamic_cast<bsptree_node_term *>(left_left_brother), left_term =
+                                    dynamic_cast<bsptree_node_term *>(left_brother); left_left_term && left_term) {
+                    borrow_from_left_left_term(node_term, left_term, left_left_term, parent_middle, parent_index);
+                    auto new_key = node_term->_data[0].first;
+                    update_references_in_parent(path, deleted_key, new_key);
+                    return;
+                }
+                throw std::logic_error("Right brother and right right brother have different types!");
+            }
+        }
+    }
+
+    /*
+     * Ни у кого занять не получилось, поэтому пытаемся выполнить merge
+     * у merge бывает три кейса:
+     * 1. merge (node, right, right_right)
+     * 2. merge (left, node, right)
+     * 3. merge (left_left, left, node)
+     */
+
+    /* case 1 */
+    if (is_right_brother_exist(parent_middle, parent_index)) {
+        auto right_brother = parent_middle->_pointers[parent_index + 1];
+        if (is_right_brother_exist(parent_middle, parent_index + 1)) {
+            auto right_right_brother = parent_middle->_pointers[parent_index + 1 + 1];
+            if (auto right_middle = dynamic_cast<bsptree_node_middle *>(right_brother), right_right_middle =
+                                dynamic_cast<bsptree_node_middle *>(right_right_brother);
+                right_middle && right_right_middle) {
+                merge_middle(node_middle, right_middle, right_right_middle, parent_middle, parent_index + 1);
+                rebalancing_after_erase(path, deleted_key);
+                return;
+            }
+            if (auto right_term = dynamic_cast<bsptree_node_term *>(right_brother), right_right_term = dynamic_cast<
+                            bsptree_node_term *>(right_right_brother); right_term && right_right_term) {
+                merge_term(node_term, right_term, right_right_term, parent_middle, parent_index + 1);
+                auto new_key = node_term->_data[0].first;
+                update_references_in_parent(path, deleted_key, new_key);
+                rebalancing_after_erase(path, deleted_key);
+                return;
+            }
+            throw std::logic_error("Right brother and right right brother have different types!");
+        }
+    }
+
+
+    /* case 2 */
+    if (is_right_brother_exist(parent_middle, parent_index) && is_left_brother_exist(parent_index)) {
+        auto right_brother = parent_middle->_pointers[parent_index + 1];
+        auto left_brother = parent_middle->_pointers[parent_index - 1];
+
+        if (auto right_middle = dynamic_cast<bsptree_node_middle *>(right_brother), left_middle = dynamic_cast<
+                        bsptree_node_middle *>(left_brother); right_middle && left_middle) {
+            merge_middle(left_middle, node_middle, right_middle, parent_middle, parent_index);
+            rebalancing_after_erase(path, deleted_key);
+            return;
+        }
+        if (auto right_term = dynamic_cast<bsptree_node_term *>(right_brother), left_term = dynamic_cast<
+                        bsptree_node_term *>(left_brother); right_term && left_term) {
+            merge_term(left_term, node_term, right_term, parent_middle, parent_index);
+            auto new_key = left_term->_data[0].first;
+            update_references_in_parent(path, deleted_key, new_key);
+            rebalancing_after_erase(path, deleted_key);
+            return;
+        }
+        throw std::logic_error("Left brother and right brother have different types!");
+    }
+
+    /* case 3 */
+    if (is_left_brother_exist(parent_index)) {
+        auto left_brother = parent_middle->_pointers[parent_index - 1];
+        if (is_left_brother_exist(parent_index - 1)) {
+            auto left_left_brother = parent_middle->_pointers[parent_index - 1 - 1];
+
+            if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left_brother), left_left_middle = dynamic_cast<
+                            bsptree_node_middle *>(left_left_brother); left_middle && left_left_middle) {
+                merge_middle(left_left_middle, left_middle, node_middle, parent_middle, parent_index - 1);
+                rebalancing_after_erase(path, deleted_key);
+                return;
+            }
+            if (auto left_term = dynamic_cast<bsptree_node_term *>(left_brother), left_left_term = dynamic_cast<
+                            bsptree_node_term *>(left_left_brother); left_term && left_left_term) {
+                merge_term(left_left_term, left_term, node_term, parent_middle, parent_index - 1);
+                auto new_key = left_left_term->_data[0].first;
+                update_references_in_parent(path, deleted_key, new_key);
+                rebalancing_after_erase(path, deleted_key);
+                return;
+            }
+            throw std::logic_error("Left brother and left left brother have different types!");
+        }
+    }
+
+    merge_with_root();
+}
+
+/**
+ * Мы дошли до того момента, что элементов в root не осталось,
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::handle_rebalancing_from_empty_root() {
+    if (auto root_middle = dynamic_cast<bsptree_node_middle *>(_root)) {
+        if (root_middle->_pointers.size() > 1)
+            throw std::logic_error(
+                "The root has 0 elements, but it has more than 1 child");
+        auto child = root_middle->_pointers[0];
+
+        get_allocator().template delete_object<bsptree_node_middle>(root_middle);
+        _root = child; /* удалили корень, теперь корень новый */
+    } else if (auto root_term = dynamic_cast<bsptree_node_term *>(_root)) {
+        get_allocator().template delete_object<bsptree_node_term>(root_term);
+        _root = nullptr;
+    } else throw std::logic_error("The root has unknown type");
+}
+
+/**
+ * Функцию следует вызывать только в случае, если остался один корень, два сына,
+ * в каждом из сыновей было по минимум элементов и из одного из узлов мы удалили элемент
+ *
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::merge_with_root() {
+    if (!_root || _root->keys_size() != 2)
+        throw std::logic_error(
+            "the function merge_with_root should not have been called!");
+
+    auto root_middle = dynamic_cast<bsptree_node_middle *>(_root);
+    if (!root_middle) throw std::logic_error("Root node is not middle node!");
+
+    auto left = root_middle->_pointers.front();
+    auto right = root_middle->_pointers.back();
+
+    root_middle->_pointers.erase(root_middle->_pointers.begin(), root_middle->_pointers.end());
+
+    if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left), right_middle = dynamic_cast<bsptree_node_middle *>
+                        (right); left_middle && right_middle) {
+        /* переносим элементы с левого узла */
+        while (!left_middle->_keys.empty()) {
+            auto element = left_middle->_keys.back();
+            left_middle->_keys.pop_back();
+            root_middle->_keys.insert(root_middle->_keys.begin(), element);
+
+            auto child = left_middle->_pointers.back();
+            left_middle->_pointers.pop_back();
+            root_middle->_pointers.insert(root_middle->_pointers.begin(), child);
+        }
+
+        /* переносим последнего ребенка */
+        auto child = left_middle->_pointers.back();
+        left_middle->_pointers.pop_back();
+        root_middle->_pointers.insert(root_middle->_pointers.begin(), child);
+
+        /* переносим элементы из правого узла */
+        while (!right_middle->_keys.empty()) {
+            auto element = right_middle->_keys.front();
+            right_middle->_keys.erase(right_middle->_keys.begin());
+            root_middle->_keys.push_back(element);
+
+            child = right_middle->_pointers.front();
+            right_middle->_pointers.erase(right_middle->_pointers.begin());
+            root_middle->_pointers.push_back(child);
+        }
+
+        /* не забываем про последнего ребенка */
+
+        child = right_middle->_pointers.front();
+        right_middle->_pointers.erase(right_middle->_pointers.begin());
+        root_middle->_pointers.push_back(child);
+        return;
+    }
+
+    if (auto left_term = dynamic_cast<bsptree_node_term *>(left), right_term = dynamic_cast<bsptree_node_term *>(right);
+        left_term && right_term) {
+        /* после того как мы смержим, останется всего лишь один узел - корень, который должен стать bsptree_node_term */
+        auto new_root = get_allocator().template new_object<bsptree_node_term>();
+        new_root->_next = nullptr;
+
+        /* переносим элементы с левого узла */
+        while (!left_term->_data.empty()) {
+            auto element = left_term->_data.back();
+            left_term->_data.pop_back();
+            new_root->_data.insert(new_root->_data.begin(), element);
+        }
+
+        /* переносим элементы с правого узла */
+        while (!right_term->_data.empty()) {
+            auto element = right_term->_data.front();
+            right_term->_data.erase(right_term->_data.begin());
+            new_root->_data.push_back(element);
+        }
+
+        get_allocator().template delete_object<bsptree_node_middle>(root_middle);
+
+        return;
+    }
+
+    throw std::logic_error("Childs of root have different types!");
+}
+
+
+/**
+ * Обновить все ссылки на удаленный узел
+ * @param path Вектор, в котором уже удален текущий узел
+ * @param deleted_key Старый ключ, который надо заменить
+ * @param new_key Новый ключ, на который нужно заменить
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::update_references_in_parent(std::vector<std::pair<bsptree_node_base *,
+                                                                         size_t> > &path, tkey &deleted_key,
+                                                                     tkey new_key) {
+    for (auto &item: path) {
+        auto [node, _] = item;
+        auto node_middle = dynamic_cast<bsptree_node_middle *>(node);
+        if (!node_middle) throw std::logic_error("Node is not middle node!");
+
+        for (auto &key: node_middle->_keys) {
+            if (key == deleted_key) key = new_key;
+        }
+    }
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_middle(bsptree_node_middle *node, bsptree_node_middle *right,
+                                                                  bsptree_node_middle *parent, size_t parent_index) {
+    /* удаляем элемент из правого брата и добавляем в родителя */
+    auto element = right->_keys.front();
+    right->_keys.erase(right->keys().begin());
+    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, element);
+
+    /* забираем элемент из родителя */
+    element = parent->_keys[parent_index];
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+    node->_keys.push_back(element);
+
+    /* не забываем перенести ребенка */
+    auto child = right->_pointers.front();
+    right->_pointers.erase(right->_pointers.begin());
+    node->_pointers.push_back(child);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_term(bsptree_node_term *node, bsptree_node_term *right,
+                                                                bsptree_node_middle *parent, size_t parent_index) {
+    auto element = right->_data.front();
+    right->_data.erase(right->_data.begin());
+    auto second_key = right->_data.front().second;
+
+    /* в родителе именно обновляем элемент */
+    parent->_keys[parent_index] = second_key; // TODO: check index
+
+    /* добавляем в наш узел */
+    node->_data.push_back(element);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_right_middle(bsptree_node_middle *node,
+                                                                        bsptree_node_middle *right,
+                                                                        bsptree_node_middle *right_right,
+                                                                        bsptree_node_middle *parent,
+                                                                        size_t parent_index) {
+    borrow_from_right_middle(right, right_right, parent, parent_index + 1); // TODO: check indexes
+    borrow_from_right_middle(node, right, parent, parent_index);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_right_term(bsptree_node_term *node, bsptree_node_term *right,
+                                                                      bsptree_node_term *right_right,
+                                                                      bsptree_node_middle *parent,
+                                                                      size_t parent_index) {
+    borrow_from_right_term(right, right_right, parent, parent_index + 1); // TODO: check indexes
+    borrow_from_right_term(node, right, parent, parent_index);
+}
+
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_middle(bsptree_node_middle *node, bsptree_node_middle *left,
+                                                                 bsptree_node_middle *parent, size_t parent_index) {
+    /* удаляем элемент из левого брата и добавляем в родителя */
+    auto element = left->_keys.back();
+    left->_keys.pop_back();
+    parent->_keys.insert(parent->_keys.begin() + parent_index - 1, element);
+
+    /* забираем элемент из родителя */
+    element = parent->_keys[parent_index];
+    parent->_keys.erase(parent->_keys.begin() + parent_index);
+    node->_keys.insert(node->_keys.begin(), element);
+
+    /* не забываем перенести ребенка */
+    auto child = left->_pointers.back();
+    left->_pointers.pop_back();
+    node->_pointers.insert(node->_pointers.begin(), child);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_term(bsptree_node_term *node, bsptree_node_term *left,
+                                                               bsptree_node_middle *parent, size_t parent_index) {
+    auto element = left->_data.back();
+    left->_data.pop_back();
+
+    /* обновляем элемент в родителе */
+    parent->_keys[parent_index] = element.second; // TODO: check index
+
+    node->_data.insert(node->_data.begin(), element);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_left_middle(bsptree_node_middle *node,
+                                                                      bsptree_node_middle *left,
+                                                                      bsptree_node_middle *left_left,
+                                                                      bsptree_node_middle *parent,
+                                                                      size_t parent_index) {
+    borrow_from_left_middle(left, left_left, parent, parent_index - 1); // TODO: check indexes
+    borrow_from_left_middle(node, left, parent, parent_index);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_left_term(bsptree_node_term *node, bsptree_node_term *left,
+                                                                    bsptree_node_term *left_left,
+                                                                    bsptree_node_middle *parent, size_t parent_index) {
+    borrow_from_left_term(left, left_left, parent, parent_index - 1); // TODO: check indexes
+    borrow_from_left_term(node, left, parent, parent_index);
+}
+
+/**
+ * Мержит три узла в два узла. Узлы являются middle узлами
+ * Экспериментально доказано, что если:
+ * 1. переполнен самый левый узел, то индекс элемента в среднем узле равен t
+ * 2. переполнен или средний, правый узел, то индекс элемента в среднем узле равен t - 1
+ *
+ * @param left Левый брат node
+ * @param node Узел, который находится посередине
+ * @param right Правый брат node
+ * @param parent Родитель
+ * @param parent_index Индекс родителя, который находится над node
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::merge_middle(bsptree_node_middle *left, bsptree_node_middle *node,
+                                                      bsptree_node_middle *right,
+                                                      bsptree_node_middle *parent, size_t parent_index) {
+    auto index_split_element = t - 1;
+    if (left->keys_size() < minimum_keys_in_node) index_split_element = t;
+
+    auto split_element = node->_keys[index_split_element];
+    node->_keys.erase(node->_keys.begin() + index_split_element);
+
+    /* элементы-разделители из родителя */
+    auto first_element_from_parent = parent->_keys[parent_index - 1];
+    auto second_element_from_parent = parent->_keys[parent_index];
+
+    parent->_keys.erase(parent->_keys.begin() + parent_index - 1);
+    parent->_keys.erase(parent->_keys.begin() + parent_index - 1);
+
+    /* заполняем левый узел */
+    /* сначала добавляем элемент из родителя */
+    left->_keys.push_back(first_element_from_parent);
+    /* переносим элементы из среднего узла в левый */
+    for (int _ = 0; _ < index_split_element; ++_) {
+        auto element_from_node = node->_keys.front();
+        left->_keys.push_back(element_from_node);
+        node->_keys.erase(node->_keys.begin());
+
+        auto child_from_node = node->_pointers.front();
+        left->_pointers.push_back(child_from_node);
+        node->_pointers.erase(node->_pointers.begin());
+    }
+
+    if (!node->_pointers.empty()) {
+        auto child_from_node = node->_pointers.front();
+        left->_pointers.push_back(child_from_node);
+        node->_pointers.erase(node->_pointers.begin());
+    }
+
+    /* заполняем правый узел */
+    /* сначала добавляем элемент из родителя */
+    right->_keys.insert(right->_keys.begin(), second_element_from_parent);
+    /* переносим оставшиеся элемент из среднего узла в правый */
+    size_t node_keys_size = node->_keys.size();
+    for (int _ = 0; _ < node_keys_size; ++_) {
+        auto element_from_node = node->_keys.back();
+        right->_keys.insert(right->_keys.begin(), element_from_node);
+        node->_keys.pop_back();
+
+        auto child_from_node = node->_pointers.back();
+        right->_pointers.insert(right->_pointers.begin(), child_from_node);
+        node->_pointers.pop_back();
+    }
+    if (!node->_pointers.empty()) {
+        auto child_from_node = node->_pointers.back();
+        right->_pointers.insert(right->_pointers.begin(), child_from_node);
+        node->_pointers.pop_back();
+    }
+
+    get_allocator().template delete_object<bsptree_node_middle>(node);
+
+    parent->_keys.insert(parent->_keys.begin() + parent_index - 1, split_element); /* добавляем в родителя */
+    parent->_pointers.erase(parent->_pointers.begin() + parent_index); /* удаляем ребенка, который указывал на node */
+}
+
+
+/**
+ * Мержит три узла в два узла. Узлы являются листьями
+ * Экспериментально доказано, что если:
+ * 1. переполнен самый левый узел, то индекс элемента в среднем узле равен t
+ * 2. переполнен или средний, правый узел, то индекс элемента в среднем узле равен t - 1
+ * @param left Левый брат node
+ * @param node Узел, который находится посередине
+ * @param right Правый брат node
+ * @param parent Родитель
+ * @param parent_index Индекс родителя, который находится над node
+ */
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+void BSP_tree<tkey, tvalue, compare, t>::merge_term(bsptree_node_term *left, bsptree_node_term *node,
+                                                    bsptree_node_term *right,
+                                                    bsptree_node_middle *parent, size_t parent_index) {
+    auto index_split_element = t - 1;
+    if (left->keys_size() < minimum_keys_in_node) index_split_element = t;
+
+    auto split_element = node->_data[index_split_element];
+
+    /* изменяем родителя */
+    parent->_keys.erase(parent->_keys.begin() + parent_index - 1);
+    parent->_keys.erase(parent->_keys.begin() + parent_index - 1);
+
+    parent->_keys.insert(parent->_keys.begin() + parent_index - 1, split_element.first);
+
+    /* обновляем указатель на next */
+    left->_next = right;
+
+    /* заполняем левый узел */
+    for (auto _ = 0; _ < index_split_element; ++_) {
+        auto element = node->_data.front();
+        node->_data.erase(node->_data.begin());
+        left->_data.push_back(element);
+    }
+
+    /* заполняем правый узел */
+    auto node_keys_size = node->keys_size();
+    for (auto _ = 0; _ < node_keys_size; ++_) {
+        auto element = node->_data.back();
+        node->_data.pop_back();
+        right->_data.insert(right->_data.begin(), element);
+    }
+
+    /* удаляем средний элемент */
+    get_allocator().template delete_object<bsptree_node_term>(node);
+
+    /* удаляем ребенка, который был под node */
+    parent->_pointers.erase(parent->_pointers.begin() + parent_index);
+}
+
+template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
+bool BSP_tree<tkey, tvalue, compare, t>::is_node_has_more_minimum_keys(bsptree_node_base *node) {
+    return node->keys_size() > minimum_keys_in_node;
+}
+
+// endregion helper functions for erase impl
 
 
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
