@@ -1746,10 +1746,6 @@ void BSP_tree<tkey, tvalue, compare, t>::handle_rebalancing_from_empty_root() {
  */
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BSP_tree<tkey, tvalue, compare, t>::merge_with_root() {
-    if (!_root || _root->keys_size() != 2)
-        throw std::logic_error(
-            "the function merge_with_root should not have been called!");
-
     auto root_middle = dynamic_cast<bsptree_node_middle *>(_root);
     if (!root_middle) throw std::logic_error("Root node is not middle node!");
 
@@ -1816,6 +1812,7 @@ void BSP_tree<tkey, tvalue, compare, t>::merge_with_root() {
         }
 
         get_allocator().template delete_object<bsptree_node_middle>(root_middle);
+        _root = new_root;
 
         return;
     }
