@@ -1845,15 +1845,15 @@ void BSP_tree<tkey, tvalue, compare, t>::update_references_in_parent(std::vector
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_middle(bsptree_node_middle *node, bsptree_node_middle *right,
                                                                   bsptree_node_middle *parent, size_t parent_index) {
-    /* удаляем элемент из правого брата и добавляем в родителя */
-    auto element = right->_keys.front();
-    right->_keys.erase(right->keys().begin());
-    parent->_keys.insert(parent->_keys.begin() + parent_index + 1, element);
-
     /* забираем элемент из родителя */
-    element = parent->_keys[parent_index];
+    auto element = parent->_keys[parent_index];
     parent->_keys.erase(parent->_keys.begin() + parent_index);
     node->_keys.push_back(element);
+
+    /* удаляем элемент из правого брата и добавляем в родителя */
+    element = right->_keys.front();
+    right->_keys.erase(right->keys().begin());
+    parent->_keys.insert(parent->_keys.begin() + parent_index, element);
 
     /* не забываем перенести ребенка */
     auto child = right->_pointers.front();
@@ -1869,7 +1869,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_term(bsptree_node_ter
     auto second_key = right->_data.front().first;
 
     /* в родителе именно обновляем элемент */
-    parent->_keys[parent_index] = second_key; // TODO: check index
+    parent->_keys[parent_index] = second_key;
 
     /* добавляем в наш узел */
     node->_data.push_back(element);
@@ -1898,15 +1898,15 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_right_term(bsptree_no
 template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t>
 void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_middle(bsptree_node_middle *node, bsptree_node_middle *left,
                                                                  bsptree_node_middle *parent, size_t parent_index) {
-    /* удаляем элемент из левого брата и добавляем в родителя */
-    auto element = left->_keys.back();
-    left->_keys.pop_back();
-    parent->_keys.insert(parent->_keys.begin() + parent_index - 1, element);
-
     /* забираем элемент из родителя */
-    element = parent->_keys[parent_index];
+    auto element = parent->_keys[parent_index];
     parent->_keys.erase(parent->_keys.begin() + parent_index);
     node->_keys.insert(node->_keys.begin(), element);
+
+    /* удаляем элемент из левого брата и добавляем в родителя */
+    element = left->_keys.back();
+    left->_keys.pop_back();
+    parent->_keys.insert(parent->_keys.begin() + parent_index, element);
 
     /* не забываем перенести ребенка */
     auto child = left->_pointers.back();
