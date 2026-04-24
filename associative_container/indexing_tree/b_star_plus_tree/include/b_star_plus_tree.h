@@ -1623,12 +1623,12 @@ void BSP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
                                     dynamic_cast<bsptree_node_middle *>(left_brother);
                     left_left_middle && left_middle) {
                     borrow_from_left_left_middle(node_middle, left_middle, left_left_middle, parent_middle,
-                                                 parent_index);
+                                                 parent_index - 1);
                     return;
                 }
                 if (auto left_left_term = dynamic_cast<bsptree_node_term *>(left_left_brother), left_term =
                                     dynamic_cast<bsptree_node_term *>(left_brother); left_left_term && left_term) {
-                    borrow_from_left_left_term(node_term, left_term, left_left_term, parent_middle, parent_index);
+                    borrow_from_left_left_term(node_term, left_term, left_left_term, parent_middle, parent_index - 1);
                     auto new_key = node_term->_data[0].first;
                     update_references_in_parent(path, deleted_key, new_key);
                     return;
