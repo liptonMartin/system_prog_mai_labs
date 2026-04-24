@@ -1602,11 +1602,11 @@ void BSP_tree<tkey, tvalue, compare, t>::rebalancing_after_erase(
         if (is_node_has_more_minimum_keys(left_brother)) {
             /* можно занять у левого брата */
             if (auto left_middle = dynamic_cast<bsptree_node_middle *>(left_brother)) {
-                borrow_from_left_middle(node_middle, left_middle, parent_middle, parent_index);
+                borrow_from_left_middle(node_middle, left_middle, parent_middle, parent_index - 1);
                 return;
             }
             if (auto left_term = dynamic_cast<bsptree_node_term *>(left_brother)) {
-                borrow_from_left_term(node_term, left_term, parent_middle, parent_index);
+                borrow_from_left_term(node_term, left_term, parent_middle, parent_index - 1);
                 auto new_key = node_term->_data[0].first;
                 update_references_in_parent(path, deleted_key, new_key);
                 return;
@@ -1866,7 +1866,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_term(bsptree_node_ter
                                                                 bsptree_node_middle *parent, size_t parent_index) {
     auto element = right->_data.front();
     right->_data.erase(right->_data.begin());
-    auto second_key = right->_data.front().second;
+    auto second_key = right->_data.front().first;
 
     /* в родителе именно обновляем элемент */
     parent->_keys[parent_index] = second_key; // TODO: check index
@@ -1921,7 +1921,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_term(bsptree_node_term
     left->_data.pop_back();
 
     /* обновляем элемент в родителе */
-    parent->_keys[parent_index] = element.second; // TODO: check index
+    parent->_keys[parent_index] = element.first; // TODO: check index
 
     node->_data.insert(node->_data.begin(), element);
 }
