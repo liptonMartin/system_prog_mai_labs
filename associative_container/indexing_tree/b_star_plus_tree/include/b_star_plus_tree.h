@@ -1237,6 +1237,9 @@ void BSP_tree<tkey, tvalue, compare, t>::handle_rebalancing_root() {
     if (auto old_root_term = dynamic_cast<bsptree_node_term *>(_root)) {
         auto second_node = get_allocator().template new_object<bsptree_node_term>();
 
+        /* обновляем указатель на next */
+        old_root_term->_next = second_node;
+
         /* добавляем со средним элементом */
         second_node->_data.insert(second_node->_data.begin(), old_root_term->_data.begin() + index_middle_element,
                                   old_root_term->_data.end());
