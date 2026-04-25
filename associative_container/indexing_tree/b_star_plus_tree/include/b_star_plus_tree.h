@@ -1881,7 +1881,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_right_middle(bsptree_
                                                                         bsptree_node_middle *right_right,
                                                                         bsptree_node_middle *parent,
                                                                         size_t parent_index) {
-    borrow_from_right_middle(right, right_right, parent, parent_index + 1); // TODO: check indexes
+    borrow_from_right_middle(right, right_right, parent, parent_index + 1);
     borrow_from_right_middle(node, right, parent, parent_index);
 }
 
@@ -1890,7 +1890,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_right_right_term(bsptree_no
                                                                       bsptree_node_term *right_right,
                                                                       bsptree_node_middle *parent,
                                                                       size_t parent_index) {
-    borrow_from_right_term(right, right_right, parent, parent_index + 1); // TODO: check indexes
+    borrow_from_right_term(right, right_right, parent, parent_index + 1);
     borrow_from_right_term(node, right, parent, parent_index);
 }
 
@@ -1921,7 +1921,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_term(bsptree_node_term
     left->_data.pop_back();
 
     /* обновляем элемент в родителе */
-    parent->_keys[parent_index] = element.first; // TODO: check index
+    parent->_keys[parent_index] = element.first;
 
     node->_data.insert(node->_data.begin(), element);
 }
@@ -1932,7 +1932,7 @@ void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_left_middle(bsptree_no
                                                                       bsptree_node_middle *left_left,
                                                                       bsptree_node_middle *parent,
                                                                       size_t parent_index) {
-    borrow_from_left_middle(left, left_left, parent, parent_index - 1); // TODO: check indexes
+    borrow_from_left_middle(left, left_left, parent, parent_index - 1);
     borrow_from_left_middle(node, left, parent, parent_index);
 }
 
@@ -1940,7 +1940,7 @@ template<typename tkey, typename tvalue, comparator<tkey> compare, std::size_t t
 void BSP_tree<tkey, tvalue, compare, t>::borrow_from_left_left_term(bsptree_node_term *node, bsptree_node_term *left,
                                                                     bsptree_node_term *left_left,
                                                                     bsptree_node_middle *parent, size_t parent_index) {
-    borrow_from_left_term(left, left_left, parent, parent_index - 1); // TODO: check indexes
+    borrow_from_left_term(left, left_left, parent, parent_index - 1);
     borrow_from_left_term(node, left, parent, parent_index);
 }
 
