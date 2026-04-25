@@ -4,7 +4,7 @@
 #include "include/b_star_plus_tree.h"
 #include <set>
 
-bool test_search_tree(BSP_tree<int, int, std::less<int>, 2> &tree, std::set<int> &added_numbers) {
+bool test_search_tree(BSP_tree<int, int, std::less<int>, 3> &tree, std::set<int> &added_numbers) {
     for (auto& item : added_numbers) {
         std::cout << "Test search " << item << '\n';
         auto result = tree.find(item);
@@ -17,7 +17,7 @@ bool test_search_tree(BSP_tree<int, int, std::less<int>, 2> &tree, std::set<int>
 }
 
 int main() {
-    BSP_tree<int, int, std::less<int>, 2> tree;
+    BSP_tree<int, int, std::less<int>, 3> tree;
 
 
     srand(10);

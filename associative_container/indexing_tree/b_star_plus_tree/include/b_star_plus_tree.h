@@ -1396,7 +1396,8 @@ void BSP_tree<tkey, tvalue, compare, t>::split_middle(bsptree_node_middle *left,
 
     /* заполняем средний узел */
     int i = index_split_element_left;
-    for (int _ = index_split_element_left; _ < left->_keys.size(); ++_) {
+    auto left_keys_size = left->keys_size();
+    for (int _ = index_split_element_left; _ < left_keys_size; ++_) {
         /* не изменяется переменная i, потому что мы делаем erase и все элементы сдвигаются */
         auto element = left->_keys[i];
         left->_keys.erase(left->_keys.begin() + i);
